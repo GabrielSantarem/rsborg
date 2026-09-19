@@ -117,12 +117,11 @@ impl FileBrowser {
     }
 
     pub fn enter_dir(&mut self) {
-        if let Some(entry) = self.entries.get(self.selected_index) {
-            if entry.is_dir {
+        if let Some(entry) = self.entries.get(self.selected_index)
+            && entry.is_dir {
                 self.current_dir = entry.path.clone();
                 self.load_entries();
             }
-        }
     }
 
     pub fn go_up(&mut self) {

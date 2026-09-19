@@ -108,7 +108,7 @@ pub fn get_mount_dir() -> PathBuf {
 pub fn get_default_restore_dir(archive_name: &str) -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let restore_base = Path::new(&home).join("Restaurados");
-    let safe_name = archive_name.replace('/', "_").replace(':', "_");
+    let safe_name = archive_name.replace(['/', ':'], "_");
     restore_base.join(safe_name)
 }
 
@@ -125,10 +125,7 @@ pub fn load_config() -> AppConfig {
     }
 
     match fs::read_to_string(&config_path) {
-        Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
-            Ok(cfg) => cfg,
-            Err(_) => AppConfig::default(),
-        },
+        Ok(content) => serde_json::from_str::<AppConfig>(&content).unwrap_or_default(),
         Err(_) => AppConfig::default(),
     }
 }

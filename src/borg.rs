@@ -126,21 +126,18 @@ impl BackupProgress {
         }
 
         let tokens: Vec<&str> = trimmed.split_whitespace().collect();
-        if let Some(pos_o) = tokens.iter().position(|&t| t == "O") {
-            if pos_o >= 2 {
+        if let Some(pos_o) = tokens.iter().position(|&t| t == "O")
+            && pos_o >= 2 {
                 progress.original_size = format!("{} {}", tokens[pos_o - 2], tokens[pos_o - 1]);
             }
-        }
-        if let Some(pos_c) = tokens.iter().position(|&t| t == "C") {
-            if pos_c >= 2 {
+        if let Some(pos_c) = tokens.iter().position(|&t| t == "C")
+            && pos_c >= 2 {
                 progress.compressed_size = format!("{} {}", tokens[pos_c - 2], tokens[pos_c - 1]);
             }
-        }
-        if let Some(pos_d) = tokens.iter().position(|&t| t == "D") {
-            if pos_d >= 2 {
+        if let Some(pos_d) = tokens.iter().position(|&t| t == "D")
+            && pos_d >= 2 {
                 progress.deduplicated_size = format!("{} {}", tokens[pos_d - 2], tokens[pos_d - 1]);
             }
-        }
         if let Some(pos_n) = tokens.iter().position(|&t| t == "N") {
             if pos_n >= 1 {
                 progress.files_count = tokens[pos_n - 1].to_string();
@@ -170,11 +167,10 @@ impl BorgManager {
         cmd.args(args);
         cmd.env("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", "yes");
         cmd.env("BORG_RELOCATED_REPO_ACCESS_IS_OK", "yes");
-        if let Some(pass) = passphrase {
-            if !pass.is_empty() {
+        if let Some(pass) = passphrase
+            && !pass.is_empty() {
                 cmd.env("BORG_PASSPHRASE", pass);
             }
-        }
         cmd
     }
 
@@ -445,7 +441,7 @@ impl BorgManager {
         if let Some(stdout) = child.stdout.take() {
             use std::io::BufRead;
             let reader = std::io::BufReader::new(stdout);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 on_file_extracted(line);
             }
         }
@@ -549,12 +545,11 @@ impl BorgManager {
             args.push("--keep-yearly".to_string());
             args.push(n.to_string());
         }
-        if let Some(ref pfx) = policy.prefix {
-            if !pfx.trim().is_empty() {
+        if let Some(ref pfx) = policy.prefix
+            && !pfx.trim().is_empty() {
                 args.push("--prefix".to_string());
                 args.push(pfx.trim().to_string());
             }
-        }
         args.push(repo_path.to_string());
 
         let arg_slices: Vec<&str> = args.iter().map(|s| s.as_str()).collect();

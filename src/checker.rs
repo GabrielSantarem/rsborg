@@ -26,11 +26,10 @@ pub fn check_instances() -> Result<(), String> {
             borg_count += 1;
         }
 
-        if name == current_exe_name || name == "rsborg" || name == "reborg" {
-            if pid.as_u32() != current_pid {
+        if (name == current_exe_name || name == "rsborg" || name == "reborg")
+            && pid.as_u32() != current_pid {
                 our_app_count += 1;
             }
-        }
     }
 
     if our_app_count > 0 {
