@@ -54,6 +54,9 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                                 app.file_browser.explicit_excludes.clear();
                                 app.file_browser.load_entries();
                             }
+                            KeyCode::Char('p') => {
+                                app.open_prune_policy_modal();
+                            }
                             KeyCode::Char('x') => {
                                 app.ask_restore_selected_archive();
                             }
@@ -196,6 +199,107 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                                 }
                             }
                             KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                                app.state = AppState::Browsing;
+                            }
+                            _ => {}
+                        },
+                        AppState::PruningPolicy(policy_state) => match key.code {
+                            KeyCode::Tab | KeyCode::Down => {
+                                policy_state.focus_field = (policy_state.focus_field + 1) % 6;
+                            }
+                            KeyCode::Up => {
+                                if policy_state.focus_field == 0 {
+                                    policy_state.focus_field = 5;
+                                } else {
+                                    policy_state.focus_field -= 1;
+                                }
+                            }
+                            KeyCode::Enter => {
+                                app.execute_prune_dry_run();
+                            }
+                            KeyCode::Esc => {
+                                app.state = AppState::Browsing;
+                            }
+                            KeyCode::Backspace => match policy_state.focus_field {
+                                0 => {
+                                    policy_state.last_str.pop();
+                                }
+                                1 => {
+                                    policy_state.daily_str.pop();
+                                }
+                                2 => {
+                                    policy_state.weekly_str.pop();
+                                }
+                                3 => {
+                                    policy_state.monthly_str.pop();
+                                }
+                                4 => {
+                                    policy_state.yearly_str.pop();
+                                }
+                                5 => {
+                                    policy_state.prefix_str.pop();
+                                }
+                                _ => {}
+                            },
+                            KeyCode::Char(c) => match policy_state.focus_field {
+                                0 => {
+                                    if c.is_ascii_digit() {
+                                        policy_state.last_str.push(c);
+                                    }
+                                }
+                                1 => {
+                                    if c.is_ascii_digit() {
+                                        policy_state.daily_str.push(c);
+                                    }
+                                }
+                                2 => {
+                                    if c.is_ascii_digit() {
+                                        policy_state.weekly_str.push(c);
+                                    }
+                                }
+                                3 => {
+                                    if c.is_ascii_digit() {
+                                        policy_state.monthly_str.push(c);
+                                    }
+                                }
+                                4 => {
+                                    if c.is_ascii_digit() {
+                                        policy_state.yearly_str.push(c);
+                                    }
+                                }
+                                5 => {
+                                    policy_state.prefix_str.push(c);
+                                }
+                                _ => {}
+                            },
+                            _ => {}
+                        },
+                        AppState::PrunePlanView(plan_state) => match key.code {
+                            KeyCode::Char('j') | KeyCode::Down => {
+                                if !plan_state.items.is_empty() {
+                                    if plan_state.selected_index
+                                        >= plan_state.items.len().saturating_sub(1)
+                                    {
+                                        plan_state.selected_index = 0;
+                                    } else {
+                                        plan_state.selected_index += 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Char('k') | KeyCode::Up => {
+                                if !plan_state.items.is_empty() {
+                                    if plan_state.selected_index == 0 {
+                                        plan_state.selected_index =
+                                            plan_state.items.len().saturating_sub(1);
+                                    } else {
+                                        plan_state.selected_index -= 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                                app.confirm_execute_prune();
+                            }
+                            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                                 app.state = AppState::Browsing;
                             }
                             _ => {}

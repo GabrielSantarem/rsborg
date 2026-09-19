@@ -5,10 +5,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Instant;
 
-use crate::borg::{ArchiveFileEntry, BackupArchive, BackupProgress, BorgManager, RepositoryInfo};
+use crate::borg::{
+    ArchiveFileEntry, BackupArchive, BackupProgress, BorgManager, PruneArchiveItem, RepositoryInfo,
+};
 use crate::browser::FileBrowser;
 use crate::checker;
-use crate::config::{self, AppConfig, RepositoryConfig};
+use crate::config::{self, AppConfig, PrunePolicy, RepositoryConfig};
 use crate::i18n::{Language, Translator};
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -38,6 +40,53 @@ pub struct RestoreRequest {
     pub paths_to_extract: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrunePolicyState {
+    pub focus_field: usize,
+    pub last_str: String,
+    pub daily_str: String,
+    pub weekly_str: String,
+    pub monthly_str: String,
+    pub yearly_str: String,
+    pub prefix_str: String,
+}
+
+impl PrunePolicyState {
+    pub fn from_policy(p: &PrunePolicy) -> Self {
+        Self {
+            focus_field: 1, // default focus: keep_daily
+            last_str: p.keep_last.map(|v| v.to_string()).unwrap_or_default(),
+            daily_str: p.keep_daily.map(|v| v.to_string()).unwrap_or_default(),
+            weekly_str: p.keep_weekly.map(|v| v.to_string()).unwrap_or_default(),
+            monthly_str: p.keep_monthly.map(|v| v.to_string()).unwrap_or_default(),
+            yearly_str: p.keep_yearly.map(|v| v.to_string()).unwrap_or_default(),
+            prefix_str: p.prefix.clone().unwrap_or_default(),
+        }
+    }
+
+    pub fn to_policy(&self) -> PrunePolicy {
+        PrunePolicy {
+            keep_last: self.last_str.trim().parse().ok(),
+            keep_daily: self.daily_str.trim().parse().ok(),
+            keep_weekly: self.weekly_str.trim().parse().ok(),
+            keep_monthly: self.monthly_str.trim().parse().ok(),
+            keep_yearly: self.yearly_str.trim().parse().ok(),
+            prefix: if self.prefix_str.trim().is_empty() {
+                None
+            } else {
+                Some(self.prefix_str.trim().to_string())
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrunePlanState {
+    pub items: Vec<PruneArchiveItem>,
+    pub selected_index: usize,
+    pub policy: PrunePolicy,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AppState {
     Initializing,
@@ -52,6 +101,8 @@ pub enum AppState {
     InspectArchive(InspectState),
     ManagingRepos,
     AddingRepo,
+    PruningPolicy(PrunePolicyState),
+    PrunePlanView(PrunePlanState),
 }
 
 #[derive(Debug, PartialEq)]
@@ -66,6 +117,8 @@ pub enum ThreadStatus {
     DoneDelete,
     DoneRestore(String),
     DoneInspect(Result<Vec<ArchiveFileEntry>, String>, String),
+    DonePruneDryRun(Result<Vec<PruneArchiveItem>, String>, PrunePolicy),
+    DonePruneExecute(Result<usize, String>),
     Error(String),
 }
 
@@ -537,7 +590,6 @@ impl App {
                             ));
                         }
                         Err(e) => {
-                            // Devolve ao mapa caso tenha falhado
                             self.mounted_archives.insert(name, mount_point);
                             self.state = AppState::ErrorPopup(format!("Erro ao desmontar:\n{}", e));
                         }
@@ -549,6 +601,103 @@ impl App {
                     ));
                 }
             }
+        }
+    }
+
+    pub fn open_prune_policy_modal(&mut self) {
+        let policy = self
+            .get_active_repo()
+            .and_then(|r| r.prune_policy.clone())
+            .unwrap_or_default();
+        self.state = AppState::PruningPolicy(PrunePolicyState::from_policy(&policy));
+    }
+
+    pub fn execute_prune_dry_run(&mut self) {
+        if let AppState::PruningPolicy(ref state) = self.state {
+            let policy = state.to_policy();
+
+            if let Some(active_id) = self.get_active_repo().map(|r| r.id.clone()) {
+                if let Some(repo) = self
+                    .config
+                    .repositories
+                    .iter_mut()
+                    .find(|r| r.id == active_id)
+                {
+                    repo.prune_policy = Some(policy.clone());
+                    let _ = config::save_config(&self.config);
+                }
+            }
+
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            self.loading_info = LoadingInfo {
+                message: "Calculando retenção e simulando prune (Dry-Run)...".to_string(),
+                elapsed_secs: 0,
+                original_size: "-".to_string(),
+                compressed_size: "-".to_string(),
+                deduplicated_size: "-".to_string(),
+                files_count: "0".to_string(),
+                current_file: "Executando borg prune --dry-run...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            let tx = self.tx.clone();
+            let manager = BorgManager::new();
+            let pol_clone = policy.clone();
+
+            thread::spawn(move || {
+                let res =
+                    manager.prune_repository(&repo_path, &pol_clone, true, passphrase.as_deref());
+                let _ = tx.send(ThreadStatus::DonePruneDryRun(res, pol_clone));
+            });
+        }
+    }
+
+    pub fn confirm_execute_prune(&mut self) {
+        if let AppState::PrunePlanView(ref plan_state) = self.state {
+            let policy = plan_state.policy.clone();
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            let to_prune_count = plan_state.items.iter().filter(|i| !i.will_keep).count();
+
+            self.loading_info = LoadingInfo {
+                message: "Aplicando retenção definitiva e compactando repositório...".to_string(),
+                elapsed_secs: 0,
+                original_size: "-".to_string(),
+                compressed_size: "-".to_string(),
+                deduplicated_size: "-".to_string(),
+                files_count: format!("{}", to_prune_count),
+                current_file: "Executando borg prune + compact...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            let tx = self.tx.clone();
+            let manager = BorgManager::new();
+
+            thread::spawn(move || {
+                let res =
+                    manager.prune_repository(&repo_path, &policy, false, passphrase.as_deref());
+                match res {
+                    Ok(_) => {
+                        let _ = tx.send(ThreadStatus::DonePruneExecute(Ok(to_prune_count)));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(ThreadStatus::DonePruneExecute(Err(e)));
+                    }
+                }
+            });
         }
     }
 
@@ -579,6 +728,7 @@ impl App {
             name,
             location,
             passphrase: if pass.is_empty() { None } else { Some(pass) },
+            prune_policy: Some(PrunePolicy::default()),
         };
 
         self.config.repositories.push(new_repo.clone());
@@ -655,6 +805,36 @@ impl App {
                         }
                     }
                 }
+                ThreadStatus::DonePruneDryRun(res, policy) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(items) => {
+                            self.state = AppState::PrunePlanView(PrunePlanState {
+                                items,
+                                selected_index: 0,
+                                policy,
+                            });
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
+                ThreadStatus::DonePruneExecute(res) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(pruned_count) => {
+                            self.load_repository();
+                            self.state = AppState::SuccessPopup(format!(
+                                "Limpeza de retenção concluída com sucesso!\n\n{} backups foram eliminados e o espaço em disco foi liberado via 'borg compact'.",
+                                pruned_count
+                            ));
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
                 ThreadStatus::Error(e) => {
                     self.loading_start = None;
                     self.state = AppState::ErrorPopup(e);
@@ -692,7 +872,6 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        // Desmonta com segurança todos os pontos FUSE antes de encerrar
         for mount_path in self.mounted_archives.values() {
             let _ = self.borg_manager.umount_archive(mount_path);
         }
@@ -821,5 +1000,28 @@ mod tests {
             }
             _ => panic!("Esperava ErrorPopup avisando que não está montado"),
         }
+    }
+
+    #[test]
+    fn test_prune_policy_state_conversion() {
+        let policy = PrunePolicy {
+            keep_last: Some(5),
+            keep_daily: Some(7),
+            keep_weekly: Some(4),
+            keep_monthly: Some(12),
+            keep_yearly: Some(1),
+            prefix: Some("auto-".to_string()),
+        };
+
+        let state = PrunePolicyState::from_policy(&policy);
+        assert_eq!(state.last_str, "5");
+        assert_eq!(state.daily_str, "7");
+        assert_eq!(state.weekly_str, "4");
+        assert_eq!(state.monthly_str, "12");
+        assert_eq!(state.yearly_str, "1");
+        assert_eq!(state.prefix_str, "auto-");
+
+        let converted_back = state.to_policy();
+        assert_eq!(policy, converted_back);
     }
 }
