@@ -3,7 +3,9 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState,
+    },
 };
 
 use super::centered_rect;
@@ -46,31 +48,29 @@ pub fn render_diff_wizard(
     );
     f.render_widget(base_p, layout[0]);
 
-    // 2. Candidate Archives to compare against
+    // 2. Candidate Archives to compare against (Stateful with scroll)
     let items: Vec<ListItem> = state
         .candidates
         .iter()
-        .enumerate()
-        .map(|(idx, name)| {
-            let is_selected = idx == state.selected_candidate_idx;
-            let bullet = if is_selected { "  ➔ " } else { "    " };
-            let style = if is_selected {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            ListItem::new(format!("{}{}", bullet, name)).style(style)
-        })
+        .map(|name| ListItem::new(format!("  {}", name)).style(Style::default().fg(Color::White)))
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(t.diff_target_title()),
-    );
-    f.render_widget(list, layout[1]);
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(t.diff_target_title()),
+        )
+        .highlight_symbol("➔ ")
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    let mut l_state = ListState::default();
+    l_state.select(Some(state.selected_candidate_idx));
+    f.render_stateful_widget(list, layout[1], &mut l_state);
 
     // 3. Content-only option
     let opt_text = state.content_only;
@@ -150,7 +150,7 @@ pub fn render_diff_view(f: &mut Frame, t: &Translator, state: &DiffViewState, sc
     let header_p = Paragraph::new(summary_line).block(Block::default().borders(Borders::ALL));
     f.render_widget(header_p, layout[0]);
 
-    // 2. Main Differences Table
+    // 2. Main Differences Table (Stateful with auto-scroll)
     if state.entries.is_empty() {
         let empty_p = Paragraph::new(t.diff_no_changes())
             .alignment(Alignment::Center)
@@ -161,9 +161,7 @@ pub fn render_diff_view(f: &mut Frame, t: &Translator, state: &DiffViewState, sc
         let rows: Vec<Row> = state
             .entries
             .iter()
-            .enumerate()
-            .map(|(idx, entry)| {
-                let is_selected = idx == state.selected_index;
+            .map(|entry| {
                 let (badge, badge_color) = match entry.kind() {
                     DiffKind::Added => (t.diff_badge_added(), Color::LightGreen),
                     DiffKind::Removed => (t.diff_badge_removed(), Color::LightRed),
@@ -171,20 +169,11 @@ pub fn render_diff_view(f: &mut Frame, t: &Translator, state: &DiffViewState, sc
                     DiffKind::Metadata => (t.diff_badge_metadata(), Color::Cyan),
                 };
 
-                let row_style = if is_selected {
-                    Style::default()
-                        .bg(Color::Rgb(30, 45, 70))
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                };
-
                 Row::new(vec![
                     Span::styled(badge, Style::default().fg(badge_color)),
                     Span::raw(entry.formatted_change()),
                     Span::raw(&entry.path),
                 ])
-                .style(row_style)
             })
             .collect();
 
@@ -207,9 +196,18 @@ pub fn render_diff_view(f: &mut Frame, t: &Translator, state: &DiffViewState, sc
                         .add_modifier(Modifier::BOLD),
                 ),
             )
+            .row_highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(30, 45, 70))
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol(">> ")
             .block(Block::default().borders(Borders::ALL));
 
-        f.render_widget(table, layout[1]);
+        let mut t_state = TableState::default();
+        t_state.select(Some(state.selected_index));
+        f.render_stateful_widget(table, layout[1], &mut t_state);
     }
 
     // 3. Detailed Change Panel for currently selected item
