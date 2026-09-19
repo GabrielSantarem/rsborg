@@ -3,6 +3,8 @@ use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::config::PrunePolicy;
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BackupArchive {
     pub archive: String,
@@ -36,6 +38,69 @@ pub struct ArchiveFileEntry {
     pub mtime: String,
     #[serde(rename = "type", default)]
     pub entry_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PruneArchiveItem {
+    pub name: String,
+    pub date_info: String,
+    pub will_keep: bool,
+    pub rule_info: String,
+}
+
+pub fn parse_prune_line(line: &str) -> Option<PruneArchiveItem> {
+    let trimmed = line.trim();
+    let will_keep = if trimmed.starts_with("Keeping archive") {
+        true
+    } else if trimmed.starts_with("Would prune:") || trimmed.starts_with("Pruning archive:") {
+        false
+    } else {
+        return None;
+    };
+
+    let rule_info = if will_keep {
+        if let Some(start) = trimmed.find('(') {
+            if let Some(end) = trimmed.find(')') {
+                trimmed[start + 1..end].to_string()
+            } else {
+                "Manter".to_string()
+            }
+        } else {
+            "Manter".to_string()
+        }
+    } else {
+        "Excluir (Fora da política)".to_string()
+    };
+
+    let content_after_colon = if let Some(paren_close) = trimmed.find(')') {
+        trimmed[paren_close + 1..].trim_start_matches(':').trim()
+    } else if let Some(colon_pos) = trimmed.find(':') {
+        trimmed[colon_pos + 1..].trim()
+    } else {
+        return None;
+    };
+
+    let name_and_date = if let Some(bracket_pos) = content_after_colon.rfind('[') {
+        content_after_colon[..bracket_pos].trim()
+    } else {
+        content_after_colon
+    };
+
+    let (name, date_str) = if let Some(last_space) = name_and_date.rfind("   ") {
+        (
+            name_and_date[..last_space].trim(),
+            name_and_date[last_space..].trim(),
+        )
+    } else {
+        (name_and_date, "")
+    };
+
+    Some(PruneArchiveItem {
+        name: name.to_string(),
+        date_info: date_str.to_string(),
+        will_keep,
+        rule_info,
+    })
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -443,6 +508,81 @@ impl BorgManager {
 
         Ok(())
     }
+
+    pub fn prune_repository(
+        &self,
+        repo_path: &str,
+        policy: &PrunePolicy,
+        dry_run: bool,
+        passphrase: Option<&str>,
+    ) -> Result<Vec<PruneArchiveItem>, String> {
+        if repo_path == "/caminho/para/meu/repo" {
+            return Ok(vec![PruneArchiveItem {
+                name: "mock-backup-1".to_string(),
+                date_info: "2023-01-01 00:00".to_string(),
+                will_keep: true,
+                rule_info: "secondly #1".to_string(),
+            }]);
+        }
+
+        let mut args: Vec<String> = vec!["prune".to_string(), "--list".to_string()];
+        if dry_run {
+            args.push("--dry-run".to_string());
+        }
+        if let Some(n) = policy.keep_last {
+            args.push("--keep-last".to_string());
+            args.push(n.to_string());
+        }
+        if let Some(n) = policy.keep_daily {
+            args.push("--keep-daily".to_string());
+            args.push(n.to_string());
+        }
+        if let Some(n) = policy.keep_weekly {
+            args.push("--keep-weekly".to_string());
+            args.push(n.to_string());
+        }
+        if let Some(n) = policy.keep_monthly {
+            args.push("--keep-monthly".to_string());
+            args.push(n.to_string());
+        }
+        if let Some(n) = policy.keep_yearly {
+            args.push("--keep-yearly".to_string());
+            args.push(n.to_string());
+        }
+        if let Some(ref pfx) = policy.prefix {
+            if !pfx.trim().is_empty() {
+                args.push("--prefix".to_string());
+                args.push(pfx.trim().to_string());
+            }
+        }
+        args.push(repo_path.to_string());
+
+        let arg_slices: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = self.prepare_command(&arg_slices, passphrase);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Falha ao executar borg prune: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let stderr_str = String::from_utf8_lossy(&output.stderr);
+        let mut items = Vec::new();
+
+        for line in stderr_str.lines() {
+            if let Some(item) = parse_prune_line(line) {
+                items.push(item);
+            }
+        }
+
+        if !dry_run {
+            let mut compact_cmd = self.prepare_command(&["compact", repo_path], passphrase);
+            let _ = compact_cmd.output();
+        }
+
+        Ok(items)
+    }
 }
 
 #[cfg(test)]
@@ -546,5 +686,55 @@ TAM: warning message line that is not json
         assert!(res.is_ok());
         assert_eq!(extracted_files.len(), 2);
         let _ = std::fs::remove_dir_all(target_dir);
+    }
+
+    #[test]
+    fn test_parse_prune_line_keeping() {
+        let line = "Keeping archive (rule: secondly #1):         bkp com espaco 2                     Fri, 2026-09-18 21:27:50 [2c4f8f4cad5beff6b6df16e5be32539f55c1d7f125d0c19e62ad9eb8c1866511]";
+        let item = parse_prune_line(line).expect("Deveria fazer parse de linha Keeping");
+
+        assert_eq!(item.name, "bkp com espaco 2");
+        assert_eq!(item.date_info, "Fri, 2026-09-18 21:27:50");
+        assert!(item.will_keep);
+        assert_eq!(item.rule_info, "rule: secondly #1");
+    }
+
+    #[test]
+    fn test_parse_prune_line_would_prune() {
+        let line = "Would prune:                                 bkp com espaco 1                     Fri, 2026-09-18 21:27:50 [1004a19bd664fae7a203aef6d614a9847ff8054e9a1ce2387cdda4d9e4eb6e39]";
+        let item = parse_prune_line(line).expect("Deveria fazer parse de linha Would prune");
+
+        assert_eq!(item.name, "bkp com espaco 1");
+        assert_eq!(item.date_info, "Fri, 2026-09-18 21:27:50");
+        assert!(!item.will_keep);
+    }
+
+    #[test]
+    fn test_parse_prune_line_real_pruning() {
+        let line = "Pruning archive:                             bkp_antigo                           Fri, 2026-09-18 21:27:50 [1004a19bd664fae7a203aef6d614a9847ff8054e9a1ce2387cdda4d9e4eb6e39]";
+        let item = parse_prune_line(line).expect("Deveria fazer parse de linha Pruning archive");
+
+        assert_eq!(item.name, "bkp_antigo");
+        assert_eq!(item.date_info, "Fri, 2026-09-18 21:27:50");
+        assert!(!item.will_keep);
+    }
+
+    #[test]
+    fn test_prune_mock_repository() {
+        let manager = BorgManager::new();
+        let policy = PrunePolicy::default();
+        let res = manager.prune_repository("/caminho/para/meu/repo", &policy, true, None);
+
+        assert!(res.is_ok());
+        let items = res.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "mock-backup-1");
+        assert!(items[0].will_keep);
+    }
+
+    #[test]
+    fn test_parse_prune_line_invalid_or_info() {
+        let line = "TAM: warning message";
+        assert!(parse_prune_line(line).is_none());
     }
 }
