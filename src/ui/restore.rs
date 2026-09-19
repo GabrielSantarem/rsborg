@@ -31,10 +31,10 @@ pub fn render(f: &mut Frame, t: &Translator, req: &RestoreRequest, screen_area: 
         ])
         .split(inner_area);
 
-    let what_text = if req.paths_to_extract.is_empty() {
-        t.restore_all_files().to_string()
+    let what_text = if let Some(first_path) = req.paths_to_extract.first() {
+        t.restore_specific_item_fmt(first_path)
     } else {
-        t.restore_specific_item_fmt(&req.paths_to_extract[0])
+        t.restore_all_files().to_string()
     };
 
     let origin_content = t.restore_origin_content_fmt(&req.archive_name, &what_text);

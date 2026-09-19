@@ -1,0 +1,166 @@
+use crate::app::App;
+use crate::app::state::{
+    AppState, CheckResultState, CheckWizardState, DiffViewState, DiffWizardState, ProfileFocus,
+};
+use crate::borg::{BorgCheckMode, CheckResult};
+use crate::events::handle_key_event;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
+
+#[test]
+fn test_browsing_v_opens_check_wizard() {
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('v')));
+    match app.state {
+        AppState::CheckWizard(ref state) => {
+            assert_eq!(state.check_mode, BorgCheckMode::Standard);
+        }
+        _ => panic!("Esperava CheckWizard ao pressionar 'v'"),
+    }
+}
+
+#[test]
+fn test_check_wizard_navigation_and_toggle() {
+    let mut app = App::new();
+    app.state = AppState::CheckWizard(CheckWizardState {
+        target_archive: Some("archive1".to_string()),
+        check_mode: BorgCheckMode::Standard,
+        check_archive_only: false,
+    });
+
+    // Tab should toggle check_archive_only
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+    if let AppState::CheckWizard(ref state) = app.state {
+        assert!(state.check_archive_only);
+    }
+
+    // Down should cycle to VerifyData
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    if let AppState::CheckWizard(ref state) = app.state {
+        assert_eq!(state.check_mode, BorgCheckMode::VerifyData);
+    }
+
+    // Up should cycle back to Standard
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Up));
+    if let AppState::CheckWizard(ref state) = app.state {
+        assert_eq!(state.check_mode, BorgCheckMode::Standard);
+    }
+
+    // Esc should exit back to browsing
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+}
+
+#[test]
+fn test_check_result_view_scroll_and_exit() {
+    let mut app = App::new();
+    app.state = AppState::CheckResultView(CheckResultState {
+        result: CheckResult {
+            success: true,
+            warnings: false,
+            log_output: vec![
+                "line 1".to_string(),
+                "line 2".to_string(),
+                "line 3".to_string(),
+            ],
+        },
+        target_display: "Repo".to_string(),
+        mode_display: "Standard".to_string(),
+        log_scroll: 0,
+    });
+
+    // Down should scroll
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    if let AppState::CheckResultView(ref state) = app.state {
+        assert_eq!(state.log_scroll, 1);
+    }
+
+    // Esc should exit
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+}
+
+#[test]
+fn test_diff_wizard_navigation_and_toggle() {
+    let mut app = App::new();
+    app.state = AppState::DiffWizard(DiffWizardState {
+        base_archive: "base".to_string(),
+        candidates: vec!["cand1".to_string(), "cand2".to_string()],
+        selected_candidate_idx: 0,
+        content_only: false,
+    });
+
+    // Tab toggles content_only
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+    if let AppState::DiffWizard(ref state) = app.state {
+        assert!(state.content_only);
+    }
+
+    // Down moves to candidate 1
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    if let AppState::DiffWizard(ref state) = app.state {
+        assert_eq!(state.selected_candidate_idx, 1);
+    }
+
+    // Esc returns to browsing
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+}
+
+#[test]
+fn test_managing_profiles_navigation_and_shortcuts() {
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    // 'b' opens profiles view
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('b')));
+    assert_eq!(app.state, AppState::ManagingProfiles { selected_index: 0 });
+
+    // 'a' opens create profile wizard
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('a')));
+    match app.state {
+        AppState::CreatingProfile(ref wizard) => {
+            assert_eq!(wizard.focus, ProfileFocus::Name);
+        }
+        _ => panic!("Esperava CreatingProfile"),
+    }
+
+    // Tab cycles focus to Compression
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+    if let AppState::CreatingProfile(ref wizard) = app.state {
+        assert_eq!(wizard.focus, ProfileFocus::Compression);
+    }
+
+    // Esc returns to ManagingProfiles
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::ManagingProfiles { selected_index: 0 });
+}
+
+#[test]
+fn test_diff_view_navigation() {
+    let mut app = App::new();
+    app.state = AppState::DiffView(DiffViewState {
+        archive1: "a1".to_string(),
+        archive2: "a2".to_string(),
+        entries: vec![
+            crate::borg::DiffEntry {
+                path: "p1".to_string(),
+                changes: vec![],
+            },
+            crate::borg::DiffEntry {
+                path: "p2".to_string(),
+                changes: vec![],
+            },
+        ],
+        selected_index: 0,
+    });
+
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    if let AppState::DiffView(ref state) = app.state {
+        assert_eq!(state.selected_index, 1);
+    }
+
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('q')));
+    assert_eq!(app.state, AppState::Browsing);
+}
