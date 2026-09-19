@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::io::Read;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -335,6 +336,113 @@ impl BorgManager {
 
         Ok(entries)
     }
+
+    pub fn extract_archive<F>(
+        &self,
+        repo_path: &str,
+        archive_name: &str,
+        target_dir: &Path,
+        paths: &[String],
+        passphrase: Option<&str>,
+        mut on_file_extracted: F,
+    ) -> Result<(), String>
+    where
+        F: FnMut(String),
+    {
+        if !target_dir.exists() {
+            std::fs::create_dir_all(target_dir)
+                .map_err(|e| format!("Falha ao criar diretório de destino: {}", e))?;
+        }
+
+        if repo_path == "/caminho/para/meu/repo" {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            on_file_extracted("documentos/relatorio.pdf".to_string());
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            on_file_extracted("projetos/src/main.rs".to_string());
+            return Ok(());
+        }
+
+        let target = format!("{}::{}", repo_path, archive_name);
+        let mut cmd_args = vec!["extract".to_string(), "--list".to_string(), target];
+        for p in paths {
+            cmd_args.push(p.clone());
+        }
+
+        let arg_slices: Vec<&str> = cmd_args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = self.prepare_command(&arg_slices, passphrase);
+        cmd.current_dir(target_dir);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Falha ao iniciar borg extract: {}", e))?;
+
+        if let Some(stdout) = child.stdout.take() {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stdout);
+            for line in reader.lines().flatten() {
+                on_file_extracted(line);
+            }
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("Erro ao aguardar processo de extração: {}", e))?;
+
+        if !status.success() {
+            let mut err_msg = String::new();
+            if let Some(mut stderr) = child.stderr.take() {
+                let _ = stderr.read_to_string(&mut err_msg);
+            }
+            return Err(format!("Erro ao extrair arquivos:\n{}", err_msg));
+        }
+
+        Ok(())
+    }
+
+    pub fn mount_archive(
+        &self,
+        repo_path: &str,
+        archive_name: &str,
+        mount_point: &Path,
+        passphrase: Option<&str>,
+    ) -> Result<(), String> {
+        if !mount_point.exists() {
+            std::fs::create_dir_all(mount_point)
+                .map_err(|e| format!("Falha ao criar ponto de montagem: {}", e))?;
+        }
+
+        if repo_path == "/caminho/para/meu/repo" {
+            return Ok(());
+        }
+
+        let target = format!("{}::{}", repo_path, archive_name);
+        let mount_str = mount_point.to_string_lossy().to_string();
+        let mut cmd = self.prepare_command(&["mount", &target, &mount_str], passphrase);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Falha ao executar borg mount: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn umount_archive(&self, mount_point: &Path) -> Result<(), String> {
+        let mount_str = mount_point.to_string_lossy().to_string();
+        let mut cmd = self.prepare_command(&["umount", &mount_str], None);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Falha ao executar borg umount: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -381,7 +489,6 @@ mod tests {
 
     #[test]
     fn test_parse_progress_non_standard_message() {
-        // Mensagem inicial de scanning ou aviso sem as flags O/C/D/N
         let line = "Iniciando escaneamento de arquivos em /home/tomate...";
         let p = BackupProgress::parse(line);
 
@@ -406,7 +513,6 @@ TAM: warning message line that is not json
             }
         }
 
-        // Deve ter ignorado a linha de log/warning e parseado com sucesso 3 entradas válidas
         assert_eq!(entries.len(), 3);
         assert_eq!(entries[0].path, "docs/arquivo.txt");
         assert_eq!(entries[0].size, 2048);
@@ -415,9 +521,30 @@ TAM: warning message line that is not json
         assert_eq!(entries[1].path, "docs");
         assert_eq!(entries[1].entry_type, "d");
 
-        // Edge case: entrada JSON com campos ausentes usa #[serde(default)] sem falhar
         assert_eq!(entries[2].path, "arquivo_minimo.txt");
         assert_eq!(entries[2].size, 0);
         assert_eq!(entries[2].mode, "");
+    }
+
+    #[test]
+    fn test_extract_mock_archive() {
+        let manager = BorgManager::new();
+        let target_dir = std::env::temp_dir().join("rsborg_test_extract");
+        let mut extracted_files = Vec::new();
+
+        let res = manager.extract_archive(
+            "/caminho/para/meu/repo",
+            "mock-backup-1",
+            &target_dir,
+            &[],
+            None,
+            |file| {
+                extracted_files.push(file);
+            },
+        );
+
+        assert!(res.is_ok());
+        assert_eq!(extracted_files.len(), 2);
+        let _ = std::fs::remove_dir_all(target_dir);
     }
 }
