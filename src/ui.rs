@@ -11,26 +11,6 @@ use crate::browser::ItemStatus;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 pub fn render(f: &mut Frame, app: &mut App) {
     let size = f.area();
 
@@ -43,20 +23,22 @@ pub fn render(f: &mut Frame, app: &mut App) {
         ])
         .split(size);
 
-    let active_repo_name = app
-        .get_active_repo()
-        .map(|r| r.name.as_str())
-        .unwrap_or("Padrão");
-    let active_repo_loc = app
-        .get_active_repo()
-        .map(|r| r.location.as_str())
-        .unwrap_or("");
-    let version_str = app.borg_version.as_deref().unwrap_or("?");
+    let version_str = app
+        .borg_version
+        .as_deref()
+        .unwrap_or("Borg: Verificando...");
+
+    let (active_repo_name, active_repo_loc) = match app.get_active_repo() {
+        Some(r) => (r.name.as_str(), r.location.as_str()),
+        None => ("Padrão Local", "Desconhecido"),
+    };
 
     let header_text = vec![Line::from(vec![
         Span::styled(
             format!(" {} ", app.t.title()),
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(
             "| {} | {}: {} [{}] ",
@@ -102,7 +84,20 @@ pub fn render(f: &mut Frame, app: &mut App) {
             let header_row = Row::new(cells).height(1).bottom_margin(1);
 
             let rows = app.archives.iter().map(|a| {
-                let r_cells = vec![Cell::from(a.name.clone()), Cell::from(a.start.clone())];
+                let is_mounted = app.mounted_archives.contains_key(&a.name);
+                let name_display = if is_mounted {
+                    format!("{} [FUSE 📂]", a.name)
+                } else {
+                    a.name.clone()
+                };
+
+                let name_cell = if is_mounted {
+                    Cell::from(name_display).style(Style::default().fg(Color::Magenta))
+                } else {
+                    Cell::from(name_display)
+                };
+
+                let r_cells = vec![name_cell, Cell::from(a.start.clone())];
                 Row::new(r_cells).style(normal_style).height(1)
             });
 
@@ -122,9 +117,19 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
             if let Some(i) = app.table_state.selected() {
                 if let Some(archive) = app.archives.get(i) {
+                    let mount_status = match app.mounted_archives.get(&archive.name) {
+                        Some(path) => format!("Sim (em {})", path.display()),
+                        None => "Não montado".to_string(),
+                    };
+
                     let md_text = format!(
-                        "ID: {}\nNome: {}\nArquivo Original: {}\n\nData de Criação: {}\nFinalizado em: {}",
-                        archive.id, archive.name, archive.archive, archive.start, archive.time
+                        "ID: {}\nNome: {}\nArquivo Original: {}\n\nData de Criação: {}\nFinalizado em: {}\n\nMontagem FUSE: {}\n\n[x] Restaurar este backup\n[m] Montar pasta FUSE\n[u] Desmontar pasta",
+                        archive.id,
+                        archive.name,
+                        archive.archive,
+                        archive.start,
+                        archive.time,
+                        mount_status
                     );
                     let p = Paragraph::new(md_text).block(
                         Block::default()
@@ -150,12 +155,17 @@ pub fn render(f: &mut Frame, app: &mut App) {
             " [Tab] Alternar Foco | [Espaço] Incluir/Excluir | [Enter/→] Entrar | [BS/←] Subir | [s / Ctrl+S] Criar | [Esc] Cancelar "
         }
         AppState::ConfirmDelete(_) => " [y / Enter] Confirmar Exclusão | [n / Esc] Cancelar ",
-        AppState::InspectArchive(_) => " [j/k/Setas] Rolar arquivos | [Esc / Enter] Voltar ",
+        AppState::ConfirmRestore(_) => {
+            " [Enter] Iniciar Restauração | [Backspace] Editar Destino | [Esc] Cancelar "
+        }
+        AppState::InspectArchive(_) => {
+            " [x] Restaurar Item Selecionado | [j/k/Setas] Rolar | [Esc / Enter] Voltar "
+        }
         AppState::ManagingRepos => " [Enter] Ativar | [a] Adicionar | [d] Remover | [Esc] Voltar ",
         AppState::AddingRepo => {
             " [Tab] Alternar Campo | [Enter] Salvar Repositório | [Esc] Cancelar "
         }
-        AppState::ErrorPopup(_) => " [Esc/Enter] Voltar ",
+        AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => " [Esc / Enter] Fechar ",
         AppState::Loading => " Executando tarefa do Borg em segundo plano... ",
         _ => " [Esc] Sair ",
     };
@@ -179,24 +189,23 @@ pub fn render(f: &mut Frame, app: &mut App) {
             .constraints([
                 Constraint::Length(3),
                 Constraint::Length(2),
-                Constraint::Min(8),
+                Constraint::Min(10),
             ])
             .split(inner_area);
 
-        let act = Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD);
-        let inact = Style::default().fg(Color::DarkGray);
-
-        let n_sty = if app.create_focus == CreateFocus::Name {
-            act
-        } else {
-            inact
-        };
-        let b_sty = if app.create_focus == CreateFocus::Browser {
-            act
-        } else {
-            inact
+        let (n_sty, b_sty) = match app.create_focus {
+            CreateFocus::Name => (
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::DarkGray),
+            ),
+            CreateFocus::Browser => (
+                Style::default().fg(Color::DarkGray),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
         };
 
         let n = Paragraph::new(app.new_backup_name.as_str())
@@ -332,13 +341,86 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(p, area);
     }
 
+    // Modal: Confirmar Restauração
+    if let AppState::ConfirmRestore(ref req) = app.state {
+        let area = centered_rect(65, 45, size);
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Assistente de Restauração / Extract ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Green));
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(4),
+                Constraint::Length(3),
+                Constraint::Min(2),
+            ])
+            .split(inner_area);
+
+        let what_text = if req.paths_to_extract.is_empty() {
+            "Restauração Total (Todos os arquivos do backup)".to_string()
+        } else {
+            format!("Item específico: {}", req.paths_to_extract[0])
+        };
+
+        let origin_p = Paragraph::new(format!(
+            "Origem: {}\nConteúdo: {}",
+            req.archive_name, what_text
+        ))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Backup Selecionado"),
+        );
+        f.render_widget(origin_p, layout[0]);
+
+        let dest_p = Paragraph::new(req.destination_path.as_str())
+            .style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Diretório de Destino (digite para alterar)"),
+            );
+        f.render_widget(dest_p, layout[1]);
+
+        let prompt = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    " [Enter] Iniciar Extração ",
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("   "),
+                Span::styled(
+                    " [Esc] Cancelar ",
+                    Style::default().fg(Color::White).bg(Color::DarkGray),
+                ),
+            ]),
+        ];
+        let prompt_p = Paragraph::new(prompt).alignment(Alignment::Center);
+        f.render_widget(prompt_p, layout[2]);
+    }
+
     // Modal: Inspecionar Conteúdo do Backup
     if let AppState::InspectArchive(ref inspect) = app.state {
-        let area = centered_rect(80, 80, size);
+        let area = centered_rect(85, 85, size);
         f.render_widget(Clear, area);
 
         let title = format!(
-            " Conteúdo do Backup: {} ({} itens) ",
+            " Conteúdo do Backup: {} ({} itens) - [x] Restaurar Item Selecionado ",
             inspect.archive_name,
             inspect.entries.len()
         );
@@ -495,6 +577,23 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(pass_p, layout[2]);
     }
 
+    // Modal: Sucesso
+    if let AppState::SuccessPopup(ref msg) = app.state {
+        let area = centered_rect(60, 35, size);
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Concluído / Sucesso ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::LightGreen));
+        let p = Paragraph::new(msg.as_str())
+            .wrap(Wrap { trim: true })
+            .alignment(Alignment::Center)
+            .block(block)
+            .style(Style::default().fg(Color::LightGreen));
+        f.render_widget(p, area);
+    }
+
     // Modal: Erro
     if let AppState::ErrorPopup(ref msg) = app.state {
         let area = centered_rect(55, 30, size);
@@ -562,7 +661,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             ]),
             Line::from(vec![
                 Span::styled(
-                    "📦  Arquivos verificados: ",
+                    "📦  Arquivos processados: ",
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -616,4 +715,24 @@ pub fn render(f: &mut Frame, app: &mut App) {
         let p = Paragraph::new(details).wrap(Wrap { trim: true });
         f.render_widget(p, layout[3]);
     }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

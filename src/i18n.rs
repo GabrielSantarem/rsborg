@@ -57,10 +57,10 @@ impl Translator {
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
             Language::Pt => {
-                " [c] Criar | [Enter] Inspecionar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
+                " [c] Criar | [Enter] Inspecionar | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [q] Sair"
             }
             Language::En => {
-                " [c] Create | [Enter] Inspect | [d] Delete | [r] Repos | [l] Language | [q] Quit"
+                " [c] Create | [Enter] Inspect | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [q] Quit"
             }
         }
     }

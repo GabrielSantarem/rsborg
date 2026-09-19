@@ -1,4 +1,6 @@
 use ratatui::widgets::TableState;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Instant;
@@ -29,6 +31,13 @@ pub struct InspectState {
     pub selected_index: usize,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RestoreRequest {
+    pub archive_name: String,
+    pub destination_path: String,
+    pub paths_to_extract: Vec<String>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AppState {
     Initializing,
@@ -37,7 +46,9 @@ pub enum AppState {
     CreatingBackup,
     Loading,
     ErrorPopup(String),
+    SuccessPopup(String),
     ConfirmDelete(String),
+    ConfirmRestore(RestoreRequest),
     InspectArchive(InspectState),
     ManagingRepos,
     AddingRepo,
@@ -53,6 +64,7 @@ pub enum ThreadStatus {
     Progress(BackupProgress),
     DoneCreate,
     DoneDelete,
+    DoneRestore(String),
     DoneInspect(Result<Vec<ArchiveFileEntry>, String>, String),
     Error(String),
 }
@@ -76,6 +88,9 @@ pub struct App {
     // Loading & Telemetria
     pub loading_info: LoadingInfo,
     pub loading_start: Option<Instant>,
+
+    // Montagem FUSE
+    pub mounted_archives: HashMap<String, PathBuf>,
 
     // Gerenciamento de Repositórios
     pub repo_list_index: usize,
@@ -115,6 +130,8 @@ impl App {
 
             loading_info: LoadingInfo::default(),
             loading_start: None,
+
+            mounted_archives: HashMap::new(),
 
             repo_list_index: 0,
             add_repo_focus: 0,
@@ -360,6 +377,181 @@ impl App {
         }
     }
 
+    pub fn ask_restore_selected_archive(&mut self) {
+        if let Some(i) = self.table_state.selected() {
+            if let Some(archive) = self.archives.get(i) {
+                let dest = config::get_default_restore_dir(&archive.name);
+                self.state = AppState::ConfirmRestore(RestoreRequest {
+                    archive_name: archive.name.clone(),
+                    destination_path: dest.to_string_lossy().to_string(),
+                    paths_to_extract: vec![],
+                });
+            }
+        }
+    }
+
+    pub fn ask_restore_specific_file(&mut self, file_path: String) {
+        if let AppState::InspectArchive(ref inspect) = self.state {
+            let archive_name = inspect.archive_name.clone();
+            let dest = config::get_default_restore_dir(&archive_name);
+            self.state = AppState::ConfirmRestore(RestoreRequest {
+                archive_name,
+                destination_path: dest.to_string_lossy().to_string(),
+                paths_to_extract: vec![file_path],
+            });
+        }
+    }
+
+    pub fn confirm_restore(&mut self) {
+        if let AppState::ConfirmRestore(ref req) = self.state {
+            let archive_name = req.archive_name.clone();
+            let dest_path = PathBuf::from(req.destination_path.trim());
+            let paths = req.paths_to_extract.clone();
+
+            if req.destination_path.trim().is_empty() {
+                self.state =
+                    AppState::ErrorPopup("Diretório de destino não pode ser vazio!".to_string());
+                return;
+            }
+
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            let is_granular = !paths.is_empty();
+            let msg = if is_granular {
+                format!("Extraindo item '{}' de '{}'...", paths[0], archive_name)
+            } else {
+                format!("Restaurando backup completo '{}'...", archive_name)
+            };
+
+            self.loading_info = LoadingInfo {
+                message: msg,
+                elapsed_secs: 0,
+                original_size: "-".to_string(),
+                compressed_size: "-".to_string(),
+                deduplicated_size: "-".to_string(),
+                files_count: "0".to_string(),
+                current_file: "Iniciando extração de arquivos...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            let tx = self.tx.clone();
+            let manager = BorgManager::new();
+            let dest_clone = dest_path.clone();
+
+            thread::spawn(move || {
+                let tx_prog = tx.clone();
+                let mut count = 0;
+                let res = manager.extract_archive(
+                    &repo_path,
+                    &archive_name,
+                    &dest_clone,
+                    &paths,
+                    passphrase.as_deref(),
+                    move |extracted_file| {
+                        count += 1;
+                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                            raw_line: format!("Extraindo {}", extracted_file),
+                            files_count: format!("{}", count),
+                            current_file: extracted_file,
+                            ..Default::default()
+                        }));
+                    },
+                );
+
+                match res {
+                    Ok(_) => {
+                        let _ = tx.send(ThreadStatus::DoneRestore(
+                            dest_clone.to_string_lossy().to_string(),
+                        ));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(ThreadStatus::Error(e));
+                    }
+                }
+            });
+        }
+    }
+
+    pub fn mount_selected_archive(&mut self) {
+        if let Some(i) = self.table_state.selected() {
+            if let Some(archive) = self.archives.get(i) {
+                let name = archive.name.clone();
+
+                if let Some(existing) = self.mounted_archives.get(&name) {
+                    self.state = AppState::SuccessPopup(format!(
+                        "Backup '{}' já está montado em:\n{}\n\nUse [u] para desmontar.",
+                        name,
+                        existing.display()
+                    ));
+                    return;
+                }
+
+                let mount_point = config::get_mount_dir().join(&name);
+                let (repo_path, passphrase) = match self.get_active_repo() {
+                    Some(r) => (r.location.clone(), r.passphrase.clone()),
+                    None => (config::get_default_repo_path(), None),
+                };
+
+                match self.borg_manager.mount_archive(
+                    &repo_path,
+                    &name,
+                    &mount_point,
+                    passphrase.as_deref(),
+                ) {
+                    Ok(_) => {
+                        self.mounted_archives
+                            .insert(name.clone(), mount_point.clone());
+                        self.state = AppState::SuccessPopup(format!(
+                            "Backup '{}' montado com sucesso em:\n{}\n\nVocê pode abrir a pasta no seu navegador de arquivos!\nQuando terminar, aperte [u] para desmontar.",
+                            name,
+                            mount_point.display()
+                        ));
+                    }
+                    Err(e) => {
+                        self.state =
+                            AppState::ErrorPopup(format!("Erro ao montar backup FUSE:\n{}", e));
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn umount_selected_archive(&mut self) {
+        if let Some(i) = self.table_state.selected() {
+            if let Some(archive) = self.archives.get(i) {
+                let name = archive.name.clone();
+
+                if let Some(mount_point) = self.mounted_archives.remove(&name) {
+                    match self.borg_manager.umount_archive(&mount_point) {
+                        Ok(_) => {
+                            self.state = AppState::SuccessPopup(format!(
+                                "Backup '{}' foi desmontado com sucesso de:\n{}",
+                                name,
+                                mount_point.display()
+                            ));
+                        }
+                        Err(e) => {
+                            // Devolve ao mapa caso tenha falhado
+                            self.mounted_archives.insert(name, mount_point);
+                            self.state = AppState::ErrorPopup(format!("Erro ao desmontar:\n{}", e));
+                        }
+                    }
+                } else {
+                    self.state = AppState::ErrorPopup(format!(
+                        "O backup '{}' não está montado atualmente.",
+                        name
+                    ));
+                }
+            }
+        }
+    }
+
     pub fn switch_active_repo(&mut self, repo_id: String) {
         self.config.active_repo_id = repo_id;
         let _ = config::save_config(&self.config);
@@ -441,6 +633,13 @@ impl App {
                     self.loading_start = None;
                     self.state = AppState::Browsing;
                 }
+                ThreadStatus::DoneRestore(target) => {
+                    self.loading_start = None;
+                    self.state = AppState::SuccessPopup(format!(
+                        "Restauração concluída com sucesso!\n\nArquivos salvos em:\n{}",
+                        target
+                    ));
+                }
                 ThreadStatus::DoneInspect(res, name) => {
                     self.loading_start = None;
                     match res {
@@ -493,6 +692,11 @@ impl App {
     }
 
     pub fn quit(&mut self) {
+        // Desmonta com segurança todos os pontos FUSE antes de encerrar
+        for mount_path in self.mounted_archives.values() {
+            let _ = self.borg_manager.umount_archive(mount_path);
+        }
+        self.mounted_archives.clear();
         self.should_quit = true;
     }
 }
@@ -506,6 +710,7 @@ mod tests {
         let app = App::new();
         assert_eq!(app.state, AppState::Initializing);
         assert!(!app.should_quit);
+        assert!(app.mounted_archives.is_empty());
     }
 
     #[test]
@@ -584,5 +789,37 @@ mod tests {
 
         app.ask_delete_archive();
         assert_eq!(app.state, AppState::Initializing);
+    }
+
+    #[test]
+    fn test_ask_restore_archive_no_selection_no_panic() {
+        let mut app = App::new();
+        app.archives.clear();
+        app.table_state.select(None);
+
+        app.ask_restore_selected_archive();
+        assert_eq!(app.state, AppState::Initializing);
+    }
+
+    #[test]
+    fn test_umount_archive_not_mounted_gives_error() {
+        let mut app = App::new();
+        app.archives.push(BackupArchive {
+            archive: "b1".to_string(),
+            barchive: "b1".to_string(),
+            id: "1".to_string(),
+            name: "b1".to_string(),
+            start: "2023-01-01".to_string(),
+            time: "2023-01-01".to_string(),
+        });
+        app.table_state.select(Some(0));
+
+        app.umount_selected_archive();
+        match app.state {
+            AppState::ErrorPopup(msg) => {
+                assert!(msg.contains("não está montado"));
+            }
+            _ => panic!("Esperava ErrorPopup avisando que não está montado"),
+        }
     }
 }

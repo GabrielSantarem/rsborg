@@ -54,6 +54,15 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                                 app.file_browser.explicit_excludes.clear();
                                 app.file_browser.load_entries();
                             }
+                            KeyCode::Char('x') => {
+                                app.ask_restore_selected_archive();
+                            }
+                            KeyCode::Char('m') => {
+                                app.mount_selected_archive();
+                            }
+                            KeyCode::Char('u') => {
+                                app.umount_selected_archive();
+                            }
                             KeyCode::Char('d') => {
                                 app.ask_delete_archive();
                             }
@@ -143,6 +152,21 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                             }
                             _ => {}
                         },
+                        AppState::ConfirmRestore(req) => match key.code {
+                            KeyCode::Enter => {
+                                app.confirm_restore();
+                            }
+                            KeyCode::Esc => {
+                                app.state = AppState::Browsing;
+                            }
+                            KeyCode::Backspace => {
+                                req.destination_path.pop();
+                            }
+                            KeyCode::Char(c) => {
+                                req.destination_path.push(c);
+                            }
+                            _ => {}
+                        },
                         AppState::InspectArchive(inspect) => match key.code {
                             KeyCode::Char('j') | KeyCode::Down => {
                                 if !inspect.entries.is_empty() {
@@ -163,6 +187,12 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                                     } else {
                                         inspect.selected_index -= 1;
                                     }
+                                }
+                            }
+                            KeyCode::Char('x') => {
+                                if let Some(entry) = inspect.entries.get(inspect.selected_index) {
+                                    let path = entry.path.clone();
+                                    app.ask_restore_specific_file(path);
                                 }
                             }
                             KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
@@ -263,7 +293,7 @@ fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                             },
                             _ => {}
                         },
-                        AppState::ErrorPopup(_) => match key.code {
+                        AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => match key.code {
                             KeyCode::Esc
                             | KeyCode::Enter
                             | KeyCode::Char('q')
