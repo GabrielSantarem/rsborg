@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RepositoryConfig {
@@ -38,7 +38,7 @@ impl Default for AppConfig {
 
 pub fn get_rsborg_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let path = std::path::Path::new(&home).join(".rsborg");
+    let path = Path::new(&home).join(".rsborg");
     if !path.exists() {
         let _ = fs::create_dir_all(&path);
     }
@@ -52,6 +52,19 @@ pub fn get_default_repo_path() -> String {
         let _ = fs::create_dir_all(&backup_dir);
     }
     backup_dir.to_string_lossy().to_string()
+}
+
+pub fn get_mount_dir() -> PathBuf {
+    let dir = get_rsborg_dir().join("mnt");
+    if !dir.exists() {
+        let _ = fs::create_dir_all(&dir);
+    }
+    dir
+}
+
+pub fn get_default_restore_dir(archive_name: &str) -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    Path::new(&home).join("Restaurados").join(archive_name)
 }
 
 pub fn get_config_file_path() -> PathBuf {
@@ -114,5 +127,18 @@ mod tests {
         let corrupt_json = "{ \"active_repo_id\": 12345, INVALID JSON HERE }";
         let parse_result = serde_json::from_str::<AppConfig>(corrupt_json);
         assert!(parse_result.is_err());
+    }
+
+    #[test]
+    fn test_mount_and_restore_paths() {
+        let mnt = get_mount_dir();
+        assert!(mnt.to_string_lossy().contains(".rsborg/mnt"));
+
+        let restore = get_default_restore_dir("meu_backup_teste");
+        assert!(
+            restore
+                .to_string_lossy()
+                .contains("Restaurados/meu_backup_teste")
+        );
     }
 }
