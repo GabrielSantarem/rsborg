@@ -67,10 +67,10 @@ impl Translator {
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
             Language::Pt => {
-                " [c] Criar | [Enter] Inspecionar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
+                " [c] Criar | [Enter] Inspecionar | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
             }
             Language::En => {
-                " [c] Create | [Enter] Inspect | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
+                " [c] Create | [Enter] Inspect | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
             }
         }
     }
@@ -857,6 +857,132 @@ impl Translator {
         match self.lang {
             Language::Pt => "Executando limpeza e compactação do repositório...",
             Language::En => "Executing repository prune and compaction...",
+        }
+    }
+    // --- 11. Diagnóstico e Verificação (Borg Check) ---
+    pub fn check_wizard_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Diagnóstico e Verificação de Integridade (Borg Check) ",
+            Language::En => " Integrity Diagnosis & Verification (Borg Check) ",
+        }
+    }
+
+    pub fn check_target_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "1. Alvo da Verificação ([Tab] para alternar)",
+            Language::En => "1. Verification Target ([Tab] to toggle)",
+        }
+    }
+
+    pub fn check_target_entire_repo(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Repositório Completo (Todos os arquivos e índices)",
+            Language::En => "Entire Repository (All archives and indexes)",
+        }
+    }
+
+    pub fn check_target_archive_fmt(&self, name: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Apenas o backup selecionado: '{}'", name),
+            Language::En => format!("Selected backup only: '{}'", name),
+        }
+    }
+
+    pub fn check_mode_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "2. Modo de Diagnóstico ([↑/↓] para navegar)",
+            Language::En => "2. Diagnostic Mode ([↑/↓] to navigate)",
+        }
+    }
+
+    pub fn check_mode_quick(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Rápido (--repository-only): Valida estruturas do repo e índices de chunks",
+            Language::En => "Quick (--repository-only): Validates repo structure and chunk indexes",
+        }
+    }
+
+    pub fn check_mode_standard(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Padrão (Repo + Arquivos): Valida integridade do repo e manifestos dos backups",
+            Language::En => "Standard (Repo + Archives): Validates repo integrity and backup manifests",
+        }
+    }
+
+    pub fn check_mode_verify_data(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Profundo (--verify-data): Descriptografa e valida integridade de TODOS os dados (Mais lento)",
+            Language::En => "Deep (--verify-data): Decrypts and verifies integrity of ALL data chunks (Slower)",
+        }
+    }
+
+    pub fn check_mode_repair(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Reparo (--repair): Tenta reconstruir índices e recuperar dados corrompidos (Avançado)",
+            Language::En => "Repair (--repair): Attempts to rebuild indexes and salvage corrupted data (Advanced)",
+        }
+    }
+
+    pub fn check_start_prompt(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Enter] Iniciar Diagnóstico      [Esc] Cancelar ",
+            Language::En => " [Enter] Start Diagnosis      [Esc] Cancel ",
+        }
+    }
+
+    pub fn check_result_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Relatório de Diagnóstico e Integridade ",
+            Language::En => " Diagnostic & Integrity Report ",
+        }
+    }
+
+    pub fn check_status_healthy(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "🟢 CONSISTENTE: Nenhum problema ou corrupção detectada!",
+            Language::En => "🟢 HEALTHY: No inconsistencies or corruption detected!",
+        }
+    }
+
+    pub fn check_status_warning(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "🟡 AVISOS: Inconsistências leves ou avisos detectados.",
+            Language::En => "🟡 WARNINGS: Minor inconsistencies or warnings detected.",
+        }
+    }
+
+    pub fn check_status_corrupted(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "🔴 ERRO: Corrupção ou inconsistência grave detectada!",
+            Language::En => "🔴 ERROR: Serious corruption or inconsistency detected!",
+        }
+    }
+
+    pub fn check_logs_header(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Logs e Mensagens do Borg (stderr) ",
+            Language::En => " Borg Diagnostic Output (stderr) ",
+        }
+    }
+
+    pub fn footer_check_wizard(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Tab] Alvo | [↑/↓] Modo | [Enter] Executar Diagnóstico | [Esc] Cancelar ",
+            Language::En => " [Tab] Target | [↑/↓] Mode | [Enter] Run Diagnosis | [Esc] Cancel ",
+        }
+    }
+
+    pub fn footer_check_result(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [j/k/Setas] Rolar Logs | [Esc / Enter] Voltar ",
+            Language::En => " [j/k/Arrows] Scroll Logs | [Esc / Enter] Back ",
+        }
+    }
+
+    pub fn loading_checking_fmt(&self, target: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Diagnosticando integridade em '{}'...", target),
+            Language::En => format!("Checking integrity on '{}'...", target),
         }
     }
 }

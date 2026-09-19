@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Instant;
 
 use crate::borg::{
-    BackupArchive, BackupProgress, BorgManager, RepositoryInfo,
+    BackupArchive, BackupProgress, BorgCheckMode, BorgManager, RepositoryInfo,
 };
 use crate::browser::FileBrowser;
 use crate::checker;
@@ -579,6 +579,86 @@ impl App {
         }
     }
 
+    pub fn open_check_wizard(&mut self) {
+        let selected_archive = self
+            .table_state
+            .selected()
+            .and_then(|i| self.archives.get(i))
+            .map(|a| a.name.clone());
+
+        self.state = AppState::CheckWizard(CheckWizardState {
+            target_archive: selected_archive,
+            check_mode: BorgCheckMode::Standard,
+            check_archive_only: false,
+        });
+    }
+
+    pub fn start_check(&mut self) {
+        if let AppState::CheckWizard(ref wizard_state) = self.state {
+            let archive_target = if wizard_state.check_archive_only {
+                wizard_state.target_archive.clone()
+            } else {
+                None
+            };
+            let mode = wizard_state.check_mode;
+
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            let target_display = match archive_target.as_deref() {
+                Some(name) => format!("Backup: {}", name),
+                None => format!("Repo: {}", repo_path),
+            };
+
+            let mode_display = match mode {
+                BorgCheckMode::RepositoryOnly => "Quick (--repository-only)".to_string(),
+                BorgCheckMode::Standard => "Standard".to_string(),
+                BorgCheckMode::VerifyData => "Deep (--verify-data)".to_string(),
+                BorgCheckMode::Repair => "Repair (--repair)".to_string(),
+            };
+
+            self.loading_info = LoadingInfo {
+                message: self.t.loading_checking_fmt(&target_display),
+                elapsed_secs: 0,
+                original_size: "-".to_string(),
+                compressed_size: "-".to_string(),
+                deduplicated_size: "-".to_string(),
+                files_count: "0".to_string(),
+                current_file: "Iniciando diagnóstico borg check...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            let tx = self.tx.clone();
+            let manager = BorgManager::new();
+            let t_disp = target_display.clone();
+            let m_disp = mode_display.clone();
+
+            thread::spawn(move || {
+                let tx_prog = tx.clone();
+                let res = manager.check_repository(
+                    &repo_path,
+                    archive_target.as_deref(),
+                    mode,
+                    passphrase.as_deref(),
+                    move |line| {
+                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                            current_file: line.clone(),
+                            raw_line: line,
+                            ..Default::default()
+                        }));
+                    },
+                );
+
+                let _ = tx.send(ThreadStatus::DoneCheck(res, t_disp, m_disp));
+            });
+        }
+    }
+
     pub fn switch_active_repo(&mut self, repo_id: String) {
         self.config.active_repo_id = repo_id;
         let _ = config::save_config(&self.config);
@@ -709,6 +789,22 @@ impl App {
                             self.state = AppState::SuccessPopup(
                                 self.t.msg_prune_success_fmt(pruned_count)
                             );
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
+                ThreadStatus::DoneCheck(res, target_display, mode_display) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(result) => {
+                            self.state = AppState::CheckResultView(CheckResultState {
+                                result,
+                                target_display,
+                                mode_display,
+                                log_scroll: 0,
+                            });
                         }
                         Err(e) => {
                             self.state = AppState::ErrorPopup(e);
@@ -879,6 +975,21 @@ mod tests {
                 assert!(msg.contains("não está montado") || msg.contains("not mounted"));
             }
             _ => panic!("Esperava ErrorPopup avisando que não está montado"),
+        }
+    }
+
+
+    #[test]
+    fn test_open_check_wizard_and_mode() {
+        let mut app = App::new();
+        app.open_check_wizard();
+
+        match app.state {
+            AppState::CheckWizard(ref state) => {
+                assert_eq!(state.check_mode, BorgCheckMode::Standard);
+                assert!(!state.check_archive_only);
+            }
+            _ => panic!("Esperava AppState::CheckWizard"),
         }
     }
 

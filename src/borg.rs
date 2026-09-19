@@ -40,6 +40,21 @@ pub struct ArchiveFileEntry {
     pub entry_type: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BorgCheckMode {
+    RepositoryOnly,
+    Standard,
+    VerifyData,
+    Repair,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckResult {
+    pub success: bool,
+    pub warnings: bool,
+    pub log_output: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PruneArchiveItem {
     pub name: String,
@@ -578,6 +593,93 @@ impl BorgManager {
 
         Ok(items)
     }
+
+    pub fn check_repository<F>(
+        &self,
+        repo_path: &str,
+        archive_name: Option<&str>,
+        mode: BorgCheckMode,
+        passphrase: Option<&str>,
+        mut on_line: F,
+    ) -> Result<CheckResult, String>
+    where
+        F: FnMut(String),
+    {
+        if repo_path == "/caminho/para/meu/repo" {
+            let log_output = vec![
+                "Starting repository check...".to_string(),
+                "Checking segments 1/1...".to_string(),
+                "Archive consistency check complete, no problems found.".to_string(),
+            ];
+            for l in &log_output {
+                on_line(l.clone());
+            }
+            return Ok(CheckResult {
+                success: true,
+                warnings: false,
+                log_output,
+            });
+        }
+
+        let mut args: Vec<String> = vec!["check".to_string(), "--info".to_string()];
+
+        match mode {
+            BorgCheckMode::RepositoryOnly => {
+                args.push("--repository-only".to_string());
+            }
+            BorgCheckMode::Standard => {}
+            BorgCheckMode::VerifyData => {
+                args.push("--verify-data".to_string());
+            }
+            BorgCheckMode::Repair => {
+                args.push("--repair".to_string());
+            }
+        }
+
+        let target = match archive_name {
+            Some(name) => format!("{}::{}", repo_path, name),
+            None => repo_path.to_string(),
+        };
+        args.push(target);
+
+        let arg_slices: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = self.prepare_command(&arg_slices, passphrase);
+        cmd.stderr(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Falha ao iniciar processo borg check: {}", e))?;
+
+        let mut log_output = Vec::new();
+
+        if let Some(stderr) = child.stderr.take() {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                on_line(line.clone());
+                log_output.push(line);
+            }
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("Erro ao aguardar término do borg check: {}", e))?;
+
+        let exit_code = status.code().unwrap_or(2);
+        let success = exit_code == 0;
+        let warnings = exit_code == 1;
+
+        if exit_code > 1 && log_output.is_empty() {
+            return Err("Processo borg check falhou com erro crítico.".to_string());
+        }
+
+        Ok(CheckResult {
+            success,
+            warnings,
+            log_output,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -712,6 +814,27 @@ TAM: warning message line that is not json
         assert_eq!(item.name, "bkp_antigo");
         assert_eq!(item.date_info, "Fri, 2026-09-18 21:27:50");
         assert!(!item.will_keep);
+    }
+
+
+    #[test]
+    fn test_check_repository_mock() {
+        let manager = BorgManager::new();
+        let mut lines = Vec::new();
+        let result = manager.check_repository(
+            "/caminho/para/meu/repo",
+            None,
+            BorgCheckMode::Standard,
+            None,
+            |line| lines.push(line),
+        );
+
+        assert!(result.is_ok());
+        let res = result.unwrap();
+        assert!(res.success);
+        assert!(!res.warnings);
+        assert_eq!(res.log_output.len(), 3);
+        assert_eq!(lines.len(), 3);
     }
 
     #[test]

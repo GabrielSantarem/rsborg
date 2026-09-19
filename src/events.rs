@@ -1,8 +1,10 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
-    App, AppState, CreateFocus, InspectState, PrunePlanState, PrunePolicyState, RestoreRequest,
+    App, AppState, CheckResultState, CheckWizardState, CreateFocus, InspectState,
+    PrunePlanState, PrunePolicyState, RestoreRequest,
 };
+use crate::borg::BorgCheckMode;
 use crate::config;
 
 enum EventOutcome {
@@ -13,6 +15,7 @@ enum EventOutcome {
     AskRestoreSpecificFile(String),
     ExecutePruneDryRun,
     ConfirmExecutePrune,
+    StartCheck,
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent) {
@@ -34,6 +37,8 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         AppState::InspectArchive(inspect) => handle_inspect_archive(inspect, key),
         AppState::PruningPolicy(policy_state) => handle_pruning_policy(policy_state, key),
         AppState::PrunePlanView(plan_state) => handle_prune_plan_view(plan_state, key),
+        AppState::CheckWizard(wizard_state) => handle_check_wizard(wizard_state, key),
+        AppState::CheckResultView(result_state) => handle_check_result_view(result_state, key),
         AppState::ManagingRepos => {
             handle_managing_repos(app, key);
             EventOutcome::None
@@ -63,6 +68,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         EventOutcome::AskRestoreSpecificFile(path) => app.ask_restore_specific_file(path),
         EventOutcome::ExecutePruneDryRun => app.execute_prune_dry_run(),
         EventOutcome::ConfirmExecutePrune => app.confirm_execute_prune(),
+        EventOutcome::StartCheck => app.start_check(),
     }
 }
 
@@ -79,6 +85,9 @@ fn handle_browsing(app: &mut App, key: KeyEvent) {
             app.file_browser.explicit_includes.clear();
             app.file_browser.explicit_excludes.clear();
             app.file_browser.load_entries();
+        }
+        KeyCode::Char('v') | KeyCode::Char('V') => {
+            app.open_check_wizard();
         }
         KeyCode::Char('p') => {
             app.open_prune_policy_modal();
@@ -421,5 +430,143 @@ fn handle_adding_repo(app: &mut App, key: KeyEvent) {
             _ => {}
         },
         _ => {}
+    }
+}
+
+fn handle_check_wizard(wizard_state: &mut CheckWizardState, key: KeyEvent) -> EventOutcome {
+    match key.code {
+        KeyCode::Esc => EventOutcome::BackToBrowsing,
+        KeyCode::Tab => {
+            if wizard_state.target_archive.is_some() {
+                wizard_state.check_archive_only = !wizard_state.check_archive_only;
+            }
+            EventOutcome::None
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            wizard_state.check_mode = match wizard_state.check_mode {
+                BorgCheckMode::RepositoryOnly => BorgCheckMode::Repair,
+                BorgCheckMode::Standard => BorgCheckMode::RepositoryOnly,
+                BorgCheckMode::VerifyData => BorgCheckMode::Standard,
+                BorgCheckMode::Repair => BorgCheckMode::VerifyData,
+            };
+            EventOutcome::None
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            wizard_state.check_mode = match wizard_state.check_mode {
+                BorgCheckMode::RepositoryOnly => BorgCheckMode::Standard,
+                BorgCheckMode::Standard => BorgCheckMode::VerifyData,
+                BorgCheckMode::VerifyData => BorgCheckMode::Repair,
+                BorgCheckMode::Repair => BorgCheckMode::RepositoryOnly,
+            };
+            EventOutcome::None
+        }
+        KeyCode::Enter => EventOutcome::StartCheck,
+        _ => EventOutcome::None,
+    }
+}
+
+fn handle_check_result_view(result_state: &mut CheckResultState, key: KeyEvent) -> EventOutcome {
+    let total_lines = result_state.result.log_output.len();
+    match key.code {
+        KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => EventOutcome::BackToBrowsing,
+        KeyCode::Down | KeyCode::Char('j') => {
+            if total_lines > 0 && result_state.log_scroll < total_lines.saturating_sub(1) {
+                result_state.log_scroll += 1;
+            }
+            EventOutcome::None
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            result_state.log_scroll = result_state.log_scroll.saturating_sub(1);
+            EventOutcome::None
+        }
+        KeyCode::PageDown => {
+            if total_lines > 0 {
+                result_state.log_scroll =
+                    (result_state.log_scroll + 10).min(total_lines.saturating_sub(1));
+            }
+            EventOutcome::None
+        }
+        KeyCode::PageUp => {
+            result_state.log_scroll = result_state.log_scroll.saturating_sub(10);
+            EventOutcome::None
+        }
+        _ => EventOutcome::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::borg::CheckResult;
+
+    #[test]
+    fn test_browsing_v_opens_check_wizard() {
+        let mut app = App::new();
+        app.state = AppState::Browsing;
+
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('v')));
+        match app.state {
+            AppState::CheckWizard(ref state) => {
+                assert_eq!(state.check_mode, BorgCheckMode::Standard);
+            }
+            _ => panic!("Esperava CheckWizard ao pressionar 'v'"),
+        }
+    }
+
+    #[test]
+    fn test_check_wizard_navigation_and_toggle() {
+        let mut app = App::new();
+        app.state = AppState::CheckWizard(CheckWizardState {
+            target_archive: Some("archive1".to_string()),
+            check_mode: BorgCheckMode::Standard,
+            check_archive_only: false,
+        });
+
+        // Tab should toggle check_archive_only
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+        if let AppState::CheckWizard(ref state) = app.state {
+            assert!(state.check_archive_only);
+        }
+
+        // Down should cycle to VerifyData
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+        if let AppState::CheckWizard(ref state) = app.state {
+            assert_eq!(state.check_mode, BorgCheckMode::VerifyData);
+        }
+
+        // Up should cycle back to Standard
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Up));
+        if let AppState::CheckWizard(ref state) = app.state {
+            assert_eq!(state.check_mode, BorgCheckMode::Standard);
+        }
+
+        // Esc should exit back to browsing
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.state, AppState::Browsing);
+    }
+
+    #[test]
+    fn test_check_result_view_scroll_and_exit() {
+        let mut app = App::new();
+        app.state = AppState::CheckResultView(CheckResultState {
+            result: CheckResult {
+                success: true,
+                warnings: false,
+                log_output: vec!["line 1".to_string(), "line 2".to_string(), "line 3".to_string()],
+            },
+            target_display: "Repo".to_string(),
+            mode_display: "Standard".to_string(),
+            log_scroll: 0,
+        });
+
+        // Down should scroll
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+        if let AppState::CheckResultView(ref state) = app.state {
+            assert_eq!(state.log_scroll, 1);
+        }
+
+        // Esc should exit
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.state, AppState::Browsing);
     }
 }

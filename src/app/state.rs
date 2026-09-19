@@ -1,4 +1,4 @@
-use crate::borg::{ArchiveFileEntry, BackupProgress, PruneArchiveItem};
+use crate::borg::{ArchiveFileEntry, BackupProgress, BorgCheckMode, CheckResult, PruneArchiveItem};
 use crate::config::PrunePolicy;
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -75,6 +75,21 @@ pub struct PrunePlanState {
     pub policy: PrunePolicy,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckWizardState {
+    pub target_archive: Option<String>,
+    pub check_mode: BorgCheckMode,
+    pub check_archive_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckResultState {
+    pub result: CheckResult,
+    pub target_display: String,
+    pub mode_display: String,
+    pub log_scroll: usize,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AppState {
     Initializing,
@@ -91,6 +106,8 @@ pub enum AppState {
     AddingRepo,
     PruningPolicy(PrunePolicyState),
     PrunePlanView(PrunePlanState),
+    CheckWizard(CheckWizardState),
+    CheckResultView(CheckResultState),
 }
 
 #[derive(Debug, PartialEq)]
@@ -107,5 +124,6 @@ pub enum ThreadStatus {
     DoneInspect(Result<Vec<ArchiveFileEntry>, String>, String),
     DonePruneDryRun(Result<Vec<PruneArchiveItem>, String>, PrunePolicy),
     DonePruneExecute(Result<usize, String>),
+    DoneCheck(Result<CheckResult, String>, String, String),
     Error(String),
 }

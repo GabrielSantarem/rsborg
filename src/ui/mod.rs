@@ -8,6 +8,7 @@ use ratatui::{
 
 pub mod backup;
 pub mod browse;
+pub mod check;
 pub mod inspect;
 pub mod popups;
 pub mod prune;
@@ -85,6 +86,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
         AppState::InspectArchive(_) => app.t.footer_inspect(),
         AppState::PruningPolicy(_) => app.t.footer_pruning_policy(),
         AppState::PrunePlanView(_) => app.t.footer_prune_plan(),
+        AppState::CheckWizard(_) => app.t.footer_check_wizard(),
+        AppState::CheckResultView(_) => app.t.footer_check_result(),
         AppState::ManagingRepos => app.t.footer_managing_repos(),
         AppState::AddingRepo => app.t.footer_adding_repo(),
         AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => app.t.footer_popup(),
@@ -117,6 +120,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     if let AppState::PrunePlanView(ref plan_state) = app.state {
         prune::render_plan_view(f, &app.t, plan_state, size);
+    }
+
+    if let AppState::CheckWizard(ref state) = app.state {
+        check::render_check_wizard(f, &app.t, state, size);
+    }
+
+    if let AppState::CheckResultView(ref state) = app.state {
+        check::render_check_result(f, &app.t, state, size);
     }
 
     if app.state == AppState::ManagingRepos {
