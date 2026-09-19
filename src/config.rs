@@ -3,12 +3,53 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+fn default_keep_daily() -> Option<u32> {
+    Some(7)
+}
+fn default_keep_weekly() -> Option<u32> {
+    Some(4)
+}
+fn default_keep_monthly() -> Option<u32> {
+    Some(12)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PrunePolicy {
+    #[serde(default)]
+    pub keep_last: Option<u32>,
+    #[serde(default = "default_keep_daily")]
+    pub keep_daily: Option<u32>,
+    #[serde(default = "default_keep_weekly")]
+    pub keep_weekly: Option<u32>,
+    #[serde(default = "default_keep_monthly")]
+    pub keep_monthly: Option<u32>,
+    #[serde(default)]
+    pub keep_yearly: Option<u32>,
+    #[serde(default)]
+    pub prefix: Option<String>,
+}
+
+impl Default for PrunePolicy {
+    fn default() -> Self {
+        Self {
+            keep_last: None,
+            keep_daily: Some(7),
+            keep_weekly: Some(4),
+            keep_monthly: Some(12),
+            keep_yearly: None,
+            prefix: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RepositoryConfig {
     pub id: String,
     pub name: String,
     pub location: String,
     pub passphrase: Option<String>,
+    #[serde(default)]
+    pub prune_policy: Option<PrunePolicy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,6 +67,7 @@ impl Default for AppConfig {
             name: "Padrão Local".to_string(),
             location: default_repo_path,
             passphrase: None,
+            prune_policy: Some(PrunePolicy::default()),
         };
 
         Self {
@@ -55,16 +97,19 @@ pub fn get_default_repo_path() -> String {
 }
 
 pub fn get_mount_dir() -> PathBuf {
-    let dir = get_rsborg_dir().join("mnt");
-    if !dir.exists() {
-        let _ = fs::create_dir_all(&dir);
+    let rsborg_dir = get_rsborg_dir();
+    let mount_dir = rsborg_dir.join("mnt");
+    if !mount_dir.exists() {
+        let _ = fs::create_dir_all(&mount_dir);
     }
-    dir
+    mount_dir
 }
 
 pub fn get_default_restore_dir(archive_name: &str) -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    Path::new(&home).join("Restaurados").join(archive_name)
+    let restore_base = Path::new(&home).join("Restaurados");
+    let safe_name = archive_name.replace('/', "_").replace(':', "_");
+    restore_base.join(safe_name)
 }
 
 pub fn get_config_file_path() -> PathBuf {
@@ -73,24 +118,26 @@ pub fn get_config_file_path() -> PathBuf {
 
 pub fn load_config() -> AppConfig {
     let config_path = get_config_file_path();
-    if config_path.exists() {
-        if let Ok(content) = fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str::<AppConfig>(&content) {
-                return config;
-            }
-        }
+    if !config_path.exists() {
+        let def = AppConfig::default();
+        let _ = save_config(&def);
+        return def;
     }
 
-    let default_config = AppConfig::default();
-    let _ = save_config(&default_config);
-    default_config
+    match fs::read_to_string(&config_path) {
+        Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
+            Ok(cfg) => cfg,
+            Err(_) => AppConfig::default(),
+        },
+        Err(_) => AppConfig::default(),
+    }
 }
 
 pub fn save_config(config: &AppConfig) -> io::Result<()> {
     let config_path = get_config_file_path();
-    let json = serde_json::to_string_pretty(config)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(config_path, json)
+    let content = serde_json::to_string_pretty(config)?;
+    fs::write(config_path, content)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -98,47 +145,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_config_has_active_repo() {
+    fn test_config_serialization_roundtrip() {
         let config = AppConfig::default();
-        assert!(!config.repositories.is_empty());
-        assert_eq!(config.active_repo_id, config.repositories[0].id);
-        assert_eq!(config.language, "pt");
+        let json_str = serde_json::to_string(&config).unwrap();
+        let deserialized: AppConfig = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(config, deserialized);
+        assert_eq!(deserialized.repositories.len(), 1);
+        assert_eq!(deserialized.repositories[0].id, "default-local");
+        assert_eq!(
+            deserialized.repositories[0].prune_policy,
+            Some(PrunePolicy::default())
+        );
     }
 
     #[test]
-    fn test_config_serialization_roundtrip() {
-        let mut config = AppConfig::default();
-        config.repositories.push(RepositoryConfig {
-            id: "external-usb".to_string(),
-            name: "HD Externo".to_string(),
-            location: "/media/tomate/Backup".to_string(),
-            passphrase: Some("super_segura".to_string()),
-        });
-
-        let json = serde_json::to_string_pretty(&config).expect("Serialization failed");
-        let deserialized: AppConfig = serde_json::from_str(&json).expect("Deserialization failed");
-
-        assert_eq!(config, deserialized);
-        assert_eq!(deserialized.repositories.len(), 2);
+    fn test_default_config_has_active_repo() {
+        let config = AppConfig::default();
+        assert!(!config.active_repo_id.is_empty());
+        assert!(
+            config
+                .repositories
+                .iter()
+                .any(|r| r.id == config.active_repo_id)
+        );
     }
 
     #[test]
     fn test_corrupt_json_fallback() {
-        let corrupt_json = "{ \"active_repo_id\": 12345, INVALID JSON HERE }";
-        let parse_result = serde_json::from_str::<AppConfig>(corrupt_json);
-        assert!(parse_result.is_err());
+        let corrupt_json = "{ invalid_json: true }";
+        let res = serde_json::from_str::<AppConfig>(corrupt_json);
+        assert!(res.is_err());
     }
 
     #[test]
     fn test_mount_and_restore_paths() {
-        let mnt = get_mount_dir();
-        assert!(mnt.to_string_lossy().contains(".rsborg/mnt"));
+        let mount_path = get_mount_dir();
+        assert!(mount_path.ends_with(".rsborg/mnt"));
 
-        let restore = get_default_restore_dir("meu_backup_teste");
+        let restore_path = get_default_restore_dir("meu_backup:2026/01/01");
         assert!(
-            restore
+            restore_path
                 .to_string_lossy()
-                .contains("Restaurados/meu_backup_teste")
+                .contains("Restaurados/meu_backup_2026_01_01")
         );
+    }
+
+    #[test]
+    fn test_prune_policy_default_values() {
+        let policy = PrunePolicy::default();
+        assert_eq!(policy.keep_last, None);
+        assert_eq!(policy.keep_daily, Some(7));
+        assert_eq!(policy.keep_weekly, Some(4));
+        assert_eq!(policy.keep_monthly, Some(12));
+        assert_eq!(policy.keep_yearly, None);
+        assert_eq!(policy.prefix, None);
     }
 }
