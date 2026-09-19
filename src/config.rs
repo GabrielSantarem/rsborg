@@ -76,6 +76,30 @@ pub struct BackupProfile {
     pub schedule: String,
 }
 
+/// Escapes a value for use inside systemd Unit files (Environment="VAR=VALUE")
+pub fn escape_systemd_value(val: &str) -> String {
+    val.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "$$")
+        .replace('%', "%%")
+        .replace('\n', "")
+}
+
+/// Escapes a command line argument for systemd ExecStart="ARG"
+pub fn escape_systemd_arg(arg: &str) -> String {
+    let escaped = arg
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "$$")
+        .replace('%', "%%");
+    format!("\"{}\"", escaped)
+}
+
+/// Safely quotes an argument for POSIX shell (used in Crontab)
+pub fn escape_shell_arg(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', "'\\\''"))
+}
+
 impl BackupProfile {
     pub fn next_archive_name(&self, now: chrono::DateTime<chrono::Local>) -> String {
         let date_str = now.format("%Y-%m-%d_%H-%M").to_string();
@@ -85,25 +109,28 @@ impl BackupProfile {
     pub fn generate_systemd_service(&self, repo_path: &str, passphrase: Option<&str>) -> String {
         let mut paths_str = String::new();
         for p in &self.paths {
-            paths_str.push_str(&format!(" \"{}\"", p.display()));
+            paths_str.push_str(&format!(" {}", escape_systemd_arg(&p.to_string_lossy())));
         }
         let mut excludes_str = String::new();
         for e in &self.excludes {
-            excludes_str.push_str(&format!(" -e \"{}\"", e.display()));
+            excludes_str.push_str(&format!(" --exclude {}", escape_systemd_arg(&e.to_string_lossy())));
         }
-        let env_pass = if let Some(pass) = passphrase {
-            format!("Environment=\"BORG_PASSPHRASE={}\"\n", pass)
+        let env_pass = if let Some(pass) = passphrase.filter(|p| !p.is_empty()) {
+            format!("Environment=\"BORG_PASSPHRASE={}\"\n", escape_systemd_value(pass))
         } else {
             String::new()
         };
 
+        let clean_repo = escape_systemd_value(repo_path);
+        let clean_name = escape_systemd_value(&self.name);
+        let archive_target = format!("\"{}::{}_{{now:%%Y-%%m-%%d_%%H-%%M}}\"", clean_repo, clean_name);
+
         format!(
-            "[Unit]\nDescription=RsBorg Automated Backup Profile: {}\nAfter=network.target\n\n[Service]\nType=oneshot\n{}ExecStart=/usr/bin/borg create --compression {} \"{}::{}_{{now}}\"{}{}\n",
+            "[Unit]\nDescription=RsBorg Automated Backup Profile: {}\nAfter=network.target\n\n[Service]\nType=oneshot\n{}ExecStart=/usr/bin/borg create --compression {} {}{}{}\n",
             self.name,
             env_pass,
             self.compression,
-            repo_path,
-            self.name,
+            archive_target,
             excludes_str,
             paths_str
         )
@@ -131,21 +158,25 @@ impl BackupProfile {
         };
         let mut paths_str = String::new();
         for p in &self.paths {
-            paths_str.push_str(&format!(" \"{}\"", p.display()));
+            paths_str.push_str(&format!(" {}", escape_shell_arg(&p.to_string_lossy())));
         }
         let mut excludes_str = String::new();
         for e in &self.excludes {
-            excludes_str.push_str(&format!(" -e \"{}\"", e.display()));
+            excludes_str.push_str(&format!(" --exclude {}", escape_shell_arg(&e.to_string_lossy())));
         }
-        let pass_prefix = if let Some(pass) = passphrase {
-            format!("BORG_PASSPHRASE=\"{}\" ", pass)
+        let pass_prefix = if let Some(pass) = passphrase.filter(|p| !p.is_empty()) {
+            format!("BORG_PASSPHRASE={} ", escape_shell_arg(pass))
         } else {
             String::new()
         };
 
+        let clean_repo = repo_path.replace('\'', "'\\\''");
+        let clean_name = self.name.replace('\'', "'\\\''");
+        let archive_target = format!("'{}::{}_{{now:\\%Y-\\%m-\\%d_\\%H-\\%M}}'", clean_repo, clean_name);
+
         format!(
-            "{} {}borg create --compression {} \"{}::{}_{{now}}\"{}{}",
-            cron_time, pass_prefix, self.compression, repo_path, self.name, excludes_str, paths_str
+            "{} {}borg create --compression {} {}{}{}",
+            cron_time, pass_prefix, self.compression, archive_target, excludes_str, paths_str
         )
     }
 }
@@ -295,8 +326,8 @@ mod tests {
         let profile = BackupProfile {
             id: "prof-1".to_string(),
             name: "BACKUP_DIARIO".to_string(),
-            paths: vec![PathBuf::from("/home/user/docs")],
-            excludes: vec![PathBuf::from("/home/user/docs/cache")],
+            paths: vec![PathBuf::from("/home/user/my docs")],
+            excludes: vec![PathBuf::from("/home/user/my docs/cache")],
             counter: 2,
             compression: "zstd,3".to_string(),
             schedule: "daily".to_string(),
@@ -306,13 +337,26 @@ mod tests {
         let name = profile.next_archive_name(now);
         assert!(name.starts_with("BACKUP_DIARIO_#3_"));
 
-        let service = profile.generate_systemd_service("/repo", Some("secret"));
-        assert!(service.contains("BORG_PASSPHRASE=secret"));
+        // Special characters in passphrase for systemd escaping test
+        let service = profile.generate_systemd_service("/repo with spaces", Some("pass\"with$special%chars"));
+        assert!(service.contains(r#"Environment="BORG_PASSPHRASE=pass\"with$$special%%chars""#));
         assert!(service.contains("--compression zstd,3"));
+        assert!(service.contains("%%Y-%%m-%%d_%%H-%%M"));
+        assert!(service.contains(r#"--exclude "/home/user/my docs/cache""#));
 
-        let cron = profile.generate_crontab_line("/repo", None);
+        // Special characters in crontab escaping test
+        let cron = profile.generate_crontab_line("/repo with spaces", Some("pass'with$dollars"));
         assert!(cron.starts_with("0 2 * * *"));
+        assert!(cron.contains(r#"BORG_PASSPHRASE='pass'\''with$dollars'"#));
         assert!(cron.contains("--compression zstd,3"));
+        assert!(cron.contains(r#"{now:\%Y-\%m-\%d_\%H-\%M}"#));
+        assert!(cron.contains("--exclude '/home/user/my docs/cache'"));
+
+        // Empty passphrase should not emit passphrase environment variable
+        let cron_empty = profile.generate_crontab_line("/repo", Some(""));
+        assert!(!cron_empty.contains("BORG_PASSPHRASE"));
+        let service_empty = profile.generate_systemd_service("/repo", Some(""));
+        assert!(!service_empty.contains("BORG_PASSPHRASE"));
     }
 
     #[test]
