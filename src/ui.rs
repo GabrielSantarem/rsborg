@@ -43,22 +43,27 @@ pub fn render(f: &mut Frame, app: &mut App) {
         ])
         .split(size);
 
-    let repo_loc = app
-        .repository
-        .as_ref()
+    let active_repo_name = app
+        .get_active_repo()
+        .map(|r| r.name.as_str())
+        .unwrap_or("Padrão");
+    let active_repo_loc = app
+        .get_active_repo()
         .map(|r| r.location.as_str())
         .unwrap_or("");
     let version_str = app.borg_version.as_deref().unwrap_or("?");
+
     let header_text = vec![Line::from(vec![
         Span::styled(
             format!(" {} ", app.t.title()),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(
-            "| {} | {}: {} ",
+            "| {} | {}: {} [{}] ",
             version_str,
             app.t.header_repo(),
-            repo_loc
+            active_repo_name,
+            active_repo_loc
         )),
     ])];
 
@@ -77,10 +82,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(p, chunks[1]);
         }
-        AppState::Browsing
-        | AppState::CreatingBackup
-        | AppState::Loading
-        | AppState::ErrorPopup(_) => {
+        _ => {
             let body_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -132,7 +134,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
                     f.render_widget(p, body_chunks[1]);
                 }
             } else {
-                let p = Paragraph::new("").block(
+                let p = Paragraph::new("Nenhum backup selecionado").block(
                     Block::default()
                         .borders(Borders::ALL)
                         .title(app.t.metadata_title()),
@@ -145,15 +147,22 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let footer_text = match app.state {
         AppState::Browsing => app.t.footer_main(),
         AppState::CreatingBackup => {
-            " [Tab] Alternar Foco | [Espaço] Incluir/Excluir | [Enter/→] Entrar | [BS/←] Subir | [s / Ctrl+S] Criar | [Esc] Cancelar"
+            " [Tab] Alternar Foco | [Espaço] Incluir/Excluir | [Enter/→] Entrar | [BS/←] Subir | [s / Ctrl+S] Criar | [Esc] Cancelar "
+        }
+        AppState::ConfirmDelete(_) => " [y / Enter] Confirmar Exclusão | [n / Esc] Cancelar ",
+        AppState::InspectArchive(_) => " [j/k/Setas] Rolar arquivos | [Esc / Enter] Voltar ",
+        AppState::ManagingRepos => " [Enter] Ativar | [a] Adicionar | [d] Remover | [Esc] Voltar ",
+        AppState::AddingRepo => {
+            " [Tab] Alternar Campo | [Enter] Salvar Repositório | [Esc] Cancelar "
         }
         AppState::ErrorPopup(_) => " [Esc/Enter] Voltar ",
-        AppState::Loading => " Executando Borg em segundo plano... ",
+        AppState::Loading => " Executando tarefa do Borg em segundo plano... ",
         _ => " [Esc] Sair ",
     };
     let footer = Paragraph::new(footer_text).block(Block::default().borders(Borders::ALL));
     f.render_widget(footer, chunks[2]);
 
+    // Modal: Criar Backup
     if app.state == AppState::CreatingBackup {
         let area = centered_rect(85, 85, size);
         f.render_widget(Clear, area);
@@ -169,7 +178,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Length(2), // Barra de ajuda de status
+                Constraint::Length(2),
                 Constraint::Min(8),
             ])
             .split(inner_area);
@@ -199,7 +208,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
             );
         f.render_widget(n, input_chunks[0]);
 
-        // Legenda explicativa
         let legend = Line::from(vec![
             Span::styled("Legenda: ", Style::default().add_modifier(Modifier::BOLD)),
             Span::styled(
@@ -220,7 +228,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
         let legend_p = Paragraph::new(legend);
         f.render_widget(legend_p, input_chunks[1]);
 
-        // File Browser
         let browser_h = app.file_browser.current_dir.to_string_lossy();
         let b_block = Block::default()
             .borders(Borders::ALL)
@@ -281,6 +288,214 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(list, input_chunks[2]);
     }
 
+    // Modal: Confirmar Exclusão
+    if let AppState::ConfirmDelete(ref name) = app.state {
+        let area = centered_rect(55, 30, size);
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Confirmar Exclusão ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Red));
+
+        let text = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Tem certeza que deseja apagar o backup "),
+                Span::styled(
+                    name,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("?"),
+            ]),
+            Line::from(""),
+            Line::from(
+                "Esta ação é IRREVERSÍVEL. O borg apagará os dados e executará 'borg compact'.",
+            ),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    "[y] Sim, Apagar Definitivamente",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("    "),
+                Span::styled("[n / Esc] Cancelar", Style::default().fg(Color::Green)),
+            ]),
+        ];
+
+        let p = Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .block(block);
+        f.render_widget(p, area);
+    }
+
+    // Modal: Inspecionar Conteúdo do Backup
+    if let AppState::InspectArchive(ref inspect) = app.state {
+        let area = centered_rect(80, 80, size);
+        f.render_widget(Clear, area);
+
+        let title = format!(
+            " Conteúdo do Backup: {} ({} itens) ",
+            inspect.archive_name,
+            inspect.entries.len()
+        );
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Cyan));
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let rows = inspect.entries.iter().map(|entry| {
+            let icon = if entry.entry_type == "d" {
+                "📁 "
+            } else {
+                "📄 "
+            };
+            let size_kb = format!("{:.1} KB", entry.size as f32 / 1024.0);
+            Row::new(vec![
+                Cell::from(entry.mode.clone()),
+                Cell::from(size_kb),
+                Cell::from(format!("{}{}", icon, entry.path)),
+            ])
+        });
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(12),
+                Constraint::Length(14),
+                Constraint::Min(20),
+            ],
+        )
+        .header(
+            Row::new(vec![
+                Cell::from("Permissões").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("Tamanho").style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from("Caminho do Arquivo")
+                    .style(Style::default().add_modifier(Modifier::BOLD)),
+            ])
+            .bottom_margin(1),
+        )
+        .row_highlight_style(Style::default().bg(Color::DarkGray).fg(Color::White));
+
+        let mut t_state = ratatui::widgets::TableState::default();
+        t_state.select(Some(inspect.selected_index));
+        f.render_stateful_widget(table, inner_area, &mut t_state);
+    }
+
+    // Modal: Gerenciador de Repositórios
+    if app.state == AppState::ManagingRepos {
+        let area = centered_rect(70, 60, size);
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Gerenciador de Repositórios ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Cyan));
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let items: Vec<ListItem> = app
+            .config
+            .repositories
+            .iter()
+            .enumerate()
+            .map(|(i, repo)| {
+                let is_selected = i == app.repo_list_index;
+                let is_active = repo.id == app.config.active_repo_id;
+
+                let active_badge = if is_active { " [ATIVO] " } else { "         " };
+                let enc_text = if repo.passphrase.is_some() {
+                    "🔒 Criptografado"
+                } else {
+                    "🔓 Sem senha"
+                };
+
+                let mut style = Style::default();
+                if is_selected {
+                    style = style.bg(Color::DarkGray).fg(Color::White);
+                }
+                if is_active {
+                    style = style.fg(Color::LightGreen).add_modifier(Modifier::BOLD);
+                }
+
+                let text = format!(
+                    "{}{} ({} | {})",
+                    active_badge, repo.name, repo.location, enc_text
+                );
+                ListItem::new(text).style(style)
+            })
+            .collect();
+
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Repositórios Cadastrados "),
+        );
+        f.render_widget(list, inner_area);
+    }
+
+    // Modal: Adicionar Novo Repositório
+    if app.state == AppState::AddingRepo {
+        let area = centered_rect(65, 50, size);
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Adicionar Novo Repositório ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Yellow));
+        let inner_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(2),
+            ])
+            .split(inner_area);
+
+        let act = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
+        let inact = Style::default().fg(Color::DarkGray);
+
+        let name_p = Paragraph::new(app.new_repo_name.as_str())
+            .style(if app.add_repo_focus == 0 { act } else { inact })
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("1. Nome Identificador (ex: HD Externo, Servidor Remoto)"),
+            );
+        f.render_widget(name_p, layout[0]);
+
+        let loc_p = Paragraph::new(app.new_repo_location.as_str())
+            .style(if app.add_repo_focus == 1 { act } else { inact })
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("2. Localização (ex: /run/media/... ou ssh://user@host/repo)"),
+            );
+        f.render_widget(loc_p, layout[1]);
+
+        let pass_display = "*".repeat(app.new_repo_passphrase.len());
+        let pass_p = Paragraph::new(pass_display.as_str())
+            .style(if app.add_repo_focus == 2 { act } else { inact })
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("3. Senha / Passphrase (Opcional - deixe vazio se não tiver)"),
+            );
+        f.render_widget(pass_p, layout[2]);
+    }
+
+    // Modal: Erro
     if let AppState::ErrorPopup(ref msg) = app.state {
         let area = centered_rect(55, 30, size);
         f.render_widget(Clear, area);
@@ -297,6 +512,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(p, area);
     }
 
+    // Modal: Loading
     if app.state == AppState::Loading {
         let area = centered_rect(65, 45, size);
         f.render_widget(Clear, area);
@@ -314,14 +530,13 @@ pub fn render(f: &mut Frame, app: &mut App) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // Espaço
-                Constraint::Length(2), // Activity bar
-                Constraint::Length(1), // Espaço
-                Constraint::Min(6),    // Details
+                Constraint::Length(1),
+                Constraint::Length(2),
+                Constraint::Length(1),
+                Constraint::Min(6),
             ])
             .split(inner_area);
 
-        // Barra de atividade animada (pulse)
         let pulse_percent = ((app.loading_info.elapsed_secs * 15
             + app.loading_info.spinner_frame as u64 * 5)
             % 100) as u16;
@@ -389,7 +604,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 ),
                 Span::styled(
                     if app.loading_info.current_file.is_empty() {
-                        "Escaneando diretórios...".to_string()
+                        "Processando dados...".to_string()
                     } else {
                         app.loading_info.current_file.clone()
                     },

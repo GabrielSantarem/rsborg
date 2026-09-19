@@ -22,8 +22,8 @@ impl Translator {
 
     pub fn header_repo(&self) -> &'static str {
         match self.lang {
-            Language::Pt => "Repositório",
-            Language::En => "Repository",
+            Language::Pt => "Repositório Ativo",
+            Language::En => "Active Repository",
         }
     }
 
@@ -56,8 +56,12 @@ impl Translator {
 
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
-            Language::Pt => " [c] Criar | [l] Idioma | [k/↑] Cima | [j/↓] Baixo | [q/Esc] Sair",
-            Language::En => " [c] Create | [l] Language | [k/↑] Up | [j/↓] Down | [q/Esc] Quit",
+            Language::Pt => {
+                " [c] Criar | [Enter] Inspecionar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
+            }
+            Language::En => {
+                " [c] Create | [Enter] Inspect | [d] Delete | [r] Repos | [l] Language | [q] Quit"
+            }
         }
     }
 }
