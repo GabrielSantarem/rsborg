@@ -6,121 +6,15 @@ use std::thread;
 use std::time::Instant;
 
 use crate::borg::{
-    ArchiveFileEntry, BackupArchive, BackupProgress, BorgManager, PruneArchiveItem, RepositoryInfo,
+    BackupArchive, BackupProgress, BorgManager, RepositoryInfo,
 };
 use crate::browser::FileBrowser;
 use crate::checker;
 use crate::config::{self, AppConfig, PrunePolicy, RepositoryConfig};
 use crate::i18n::{Language, Translator};
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct LoadingInfo {
-    pub message: String,
-    pub elapsed_secs: u64,
-    pub original_size: String,
-    pub compressed_size: String,
-    pub deduplicated_size: String,
-    pub files_count: String,
-    pub current_file: String,
-    pub raw_line: String,
-    pub spinner_frame: usize,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct InspectState {
-    pub archive_name: String,
-    pub entries: Vec<ArchiveFileEntry>,
-    pub selected_index: usize,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RestoreRequest {
-    pub archive_name: String,
-    pub destination_path: String,
-    pub paths_to_extract: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PrunePolicyState {
-    pub focus_field: usize,
-    pub last_str: String,
-    pub daily_str: String,
-    pub weekly_str: String,
-    pub monthly_str: String,
-    pub yearly_str: String,
-    pub prefix_str: String,
-}
-
-impl PrunePolicyState {
-    pub fn from_policy(p: &PrunePolicy) -> Self {
-        Self {
-            focus_field: 1, // default focus: keep_daily
-            last_str: p.keep_last.map(|v| v.to_string()).unwrap_or_default(),
-            daily_str: p.keep_daily.map(|v| v.to_string()).unwrap_or_default(),
-            weekly_str: p.keep_weekly.map(|v| v.to_string()).unwrap_or_default(),
-            monthly_str: p.keep_monthly.map(|v| v.to_string()).unwrap_or_default(),
-            yearly_str: p.keep_yearly.map(|v| v.to_string()).unwrap_or_default(),
-            prefix_str: p.prefix.clone().unwrap_or_default(),
-        }
-    }
-
-    pub fn to_policy(&self) -> PrunePolicy {
-        PrunePolicy {
-            keep_last: self.last_str.trim().parse().ok(),
-            keep_daily: self.daily_str.trim().parse().ok(),
-            keep_weekly: self.weekly_str.trim().parse().ok(),
-            keep_monthly: self.monthly_str.trim().parse().ok(),
-            keep_yearly: self.yearly_str.trim().parse().ok(),
-            prefix: if self.prefix_str.trim().is_empty() {
-                None
-            } else {
-                Some(self.prefix_str.trim().to_string())
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PrunePlanState {
-    pub items: Vec<PruneArchiveItem>,
-    pub selected_index: usize,
-    pub policy: PrunePolicy,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum AppState {
-    Initializing,
-    InitError(String),
-    Browsing,
-    CreatingBackup,
-    Loading,
-    ErrorPopup(String),
-    SuccessPopup(String),
-    ConfirmDelete(String),
-    ConfirmRestore(RestoreRequest),
-    InspectArchive(InspectState),
-    ManagingRepos,
-    AddingRepo,
-    PruningPolicy(PrunePolicyState),
-    PrunePlanView(PrunePlanState),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum CreateFocus {
-    Name,
-    Browser,
-}
-
-pub enum ThreadStatus {
-    Progress(BackupProgress),
-    DoneCreate,
-    DoneDelete,
-    DoneRestore(String),
-    DoneInspect(Result<Vec<ArchiveFileEntry>, String>, String),
-    DonePruneDryRun(Result<Vec<PruneArchiveItem>, String>, PrunePolicy),
-    DonePruneExecute(Result<usize, String>),
-    Error(String),
-}
+pub mod state;
+pub use state::*;
 
 pub struct App {
     pub state: AppState,
@@ -350,11 +244,10 @@ impl App {
     }
 
     pub fn ask_delete_archive(&mut self) {
-        if let Some(i) = self.table_state.selected() {
-            if let Some(archive) = self.archives.get(i) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i) {
                 self.state = AppState::ConfirmDelete(archive.name.clone());
             }
-        }
     }
 
     pub fn confirm_delete_archive(&mut self, archive_name: String) {
@@ -396,8 +289,8 @@ impl App {
     }
 
     pub fn inspect_selected_archive(&mut self) {
-        if let Some(i) = self.table_state.selected() {
-            if let Some(archive) = self.archives.get(i) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i) {
                 let name = archive.name.clone();
                 let (repo_path, passphrase) = match self.get_active_repo() {
                     Some(r) => (r.location.clone(), r.passphrase.clone()),
@@ -427,12 +320,11 @@ impl App {
                     let _ = tx.send(ThreadStatus::DoneInspect(res, name));
                 });
             }
-        }
     }
 
     pub fn ask_restore_selected_archive(&mut self) {
-        if let Some(i) = self.table_state.selected() {
-            if let Some(archive) = self.archives.get(i) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i) {
                 let dest = config::get_default_restore_dir(&archive.name);
                 self.state = AppState::ConfirmRestore(RestoreRequest {
                     archive_name: archive.name.clone(),
@@ -440,7 +332,6 @@ impl App {
                     paths_to_extract: vec![],
                 });
             }
-        }
     }
 
     pub fn ask_restore_specific_file(&mut self, file_path: String) {
@@ -532,8 +423,8 @@ impl App {
     }
 
     pub fn mount_selected_archive(&mut self) {
-        if let Some(i) = self.table_state.selected() {
-            if let Some(archive) = self.archives.get(i) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i) {
                 let name = archive.name.clone();
 
                 if let Some(existing) = self.mounted_archives.get(&name) {
@@ -572,12 +463,11 @@ impl App {
                     }
                 }
             }
-        }
     }
 
     pub fn umount_selected_archive(&mut self) {
-        if let Some(i) = self.table_state.selected() {
-            if let Some(archive) = self.archives.get(i) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i) {
                 let name = archive.name.clone();
 
                 if let Some(mount_point) = self.mounted_archives.remove(&name) {
@@ -601,7 +491,6 @@ impl App {
                     ));
                 }
             }
-        }
     }
 
     pub fn open_prune_policy_modal(&mut self) {
@@ -616,8 +505,8 @@ impl App {
         if let AppState::PruningPolicy(ref state) = self.state {
             let policy = state.to_policy();
 
-            if let Some(active_id) = self.get_active_repo().map(|r| r.id.clone()) {
-                if let Some(repo) = self
+            if let Some(active_id) = self.get_active_repo().map(|r| r.id.clone())
+                && let Some(repo) = self
                     .config
                     .repositories
                     .iter_mut()
@@ -626,7 +515,6 @@ impl App {
                     repo.prune_policy = Some(policy.clone());
                     let _ = config::save_config(&self.config);
                 }
-            }
 
             let (repo_path, passphrase) = match self.get_active_repo() {
                 Some(r) => (r.location.clone(), r.passphrase.clone()),
