@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::process::{Command, Stdio};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BackupArchive {
     pub archive: String,
     pub barchive: String,
@@ -12,19 +12,32 @@ pub struct BackupArchive {
     pub time: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct RepositoryInfo {
     pub id: String,
     pub location: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BorgArchiveList {
     pub archives: Vec<BackupArchive>,
     pub repository: RepositoryInfo,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct ArchiveFileEntry {
+    pub path: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub mtime: String,
+    #[serde(rename = "type", default)]
+    pub entry_type: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct BackupProgress {
     pub raw_line: String,
     pub original_size: String,
@@ -42,8 +55,10 @@ impl BackupProgress {
             ..Default::default()
         };
 
-        // Borg format: "12.34 MB O 5.67 MB C 1.20 MB D 45 N /path/to/file"
-        // Let's parse components if available
+        if trimmed.is_empty() {
+            return progress;
+        }
+
         let tokens: Vec<&str> = trimmed.split_whitespace().collect();
         if let Some(pos_o) = tokens.iter().position(|&t| t == "O") {
             if pos_o >= 2 {
@@ -84,6 +99,19 @@ impl BorgManager {
         }
     }
 
+    fn prepare_command(&self, args: &[&str], passphrase: Option<&str>) -> Command {
+        let mut cmd = Command::new(&self.bin_path);
+        cmd.args(args);
+        cmd.env("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", "yes");
+        cmd.env("BORG_RELOCATED_REPO_ACCESS_IS_OK", "yes");
+        if let Some(pass) = passphrase {
+            if !pass.is_empty() {
+                cmd.env("BORG_PASSPHRASE", pass);
+            }
+        }
+        cmd
+    }
+
     pub fn verify_installation(&self) -> Result<String, String> {
         match Command::new(&self.bin_path).arg("-V").output() {
             Ok(o) => {
@@ -97,11 +125,15 @@ impl BorgManager {
         }
     }
 
-    pub fn init_repository(&self, repo_path: &str) -> Result<(), String> {
-        let o = Command::new(&self.bin_path)
-            .args(["init", "-e", "none", repo_path])
-            .output()
-            .map_err(|e| e.to_string())?;
+    pub fn init_repository(&self, repo_path: &str, passphrase: Option<&str>) -> Result<(), String> {
+        let enc_mode = if passphrase.is_some() && !passphrase.unwrap_or("").is_empty() {
+            "repokey-blake2"
+        } else {
+            "none"
+        };
+
+        let mut cmd = self.prepare_command(&["init", "-e", enc_mode, repo_path], passphrase);
+        let o = cmd.output().map_err(|e| e.to_string())?;
 
         if o.status.success() {
             Ok(())
@@ -110,7 +142,11 @@ impl BorgManager {
         }
     }
 
-    pub fn list_archives(&self, repo_path: &str) -> Result<BorgArchiveList, String> {
+    pub fn list_archives(
+        &self,
+        repo_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<BorgArchiveList, String> {
         if repo_path == "/caminho/para/meu/repo" {
             let mock_json = r#"{
                 "repository": {
@@ -135,10 +171,8 @@ impl BorgManager {
             return Ok(list);
         }
 
-        let output = Command::new(&self.bin_path)
-            .args(["list", "--json", repo_path])
-            .output()
-            .map_err(|e| format!("Falha: {}", e))?;
+        let mut cmd = self.prepare_command(&["list", "--json", repo_path], passphrase);
+        let output = cmd.output().map_err(|e| format!("Falha: {}", e))?;
 
         if !output.status.success() {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
@@ -157,26 +191,22 @@ impl BorgManager {
         archive_name: &str,
         paths: Vec<String>,
         excludes: Vec<String>,
+        passphrase: Option<&str>,
         mut on_progress: F,
     ) -> Result<(), String>
     where
         F: FnMut(BackupProgress) + Send + 'static,
     {
-        // Se for o repositório de teste/mock, simula o progresso realista
         if repo_path == "/caminho/para/meu/repo" {
             let sample_files = [
                 "documentos/relatorio.pdf",
                 "projetos/src/main.rs",
                 "imagens/foto1.png",
-                "musicas/faixa.flac",
-                "videos/demo.mp4",
-                "config/settings.json",
-                "banco_de_dados.sqlite",
                 "finalizando_arquivos...",
             ];
 
             for (i, file) in sample_files.iter().enumerate() {
-                std::thread::sleep(std::time::Duration::from_millis(350));
+                std::thread::sleep(std::time::Duration::from_millis(50));
                 let progress = BackupProgress {
                     raw_line: format!("Processando {}", file),
                     original_size: format!("{:.1} MB", (i + 1) as f32 * 12.5),
@@ -206,10 +236,11 @@ impl BorgManager {
             cmd_args.push(exc);
         }
 
-        let mut child = Command::new(&self.bin_path)
-            .args(&cmd_args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+        let arg_slices: Vec<&str> = cmd_args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = self.prepare_command(&arg_slices, passphrase);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        let mut child = cmd
             .spawn()
             .map_err(|e| format!("Falha ao iniciar borg create: {}", e))?;
 
@@ -251,5 +282,142 @@ impl BorgManager {
         }
 
         Ok(())
+    }
+
+    pub fn delete_archive(
+        &self,
+        repo_path: &str,
+        archive_name: &str,
+        passphrase: Option<&str>,
+    ) -> Result<(), String> {
+        let target = format!("{}::{}", repo_path, archive_name);
+
+        let mut cmd = self.prepare_command(&["delete", &target], passphrase);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Falha ao executar borg delete: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let mut compact_cmd = self.prepare_command(&["compact", repo_path], passphrase);
+        let _ = compact_cmd.output();
+
+        Ok(())
+    }
+
+    pub fn list_archive_contents(
+        &self,
+        repo_path: &str,
+        archive_name: &str,
+        passphrase: Option<&str>,
+    ) -> Result<Vec<ArchiveFileEntry>, String> {
+        let target = format!("{}::{}", repo_path, archive_name);
+
+        let mut cmd = self.prepare_command(&["list", "--json-lines", &target], passphrase);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Falha ao listar conteúdo do backup: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let mut entries = Vec::new();
+
+        for line in stdout_str.lines() {
+            if let Ok(entry) = serde_json::from_str::<ArchiveFileEntry>(line) {
+                entries.push(entry);
+            }
+        }
+
+        Ok(entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_empty_or_whitespace_progress() {
+        let p1 = BackupProgress::parse("");
+        assert_eq!(p1.raw_line, "");
+        assert_eq!(p1.files_count, "");
+        assert_eq!(p1.current_file, "");
+
+        let p2 = BackupProgress::parse("     \n\t   ");
+        assert_eq!(p2.raw_line, "");
+    }
+
+    #[test]
+    fn test_parse_standard_borg_progress_line() {
+        let line = "12.34 MB O 5.67 MB C 1.20 MB D 45 N /home/user/documentos/relatorio.pdf";
+        let p = BackupProgress::parse(line);
+
+        assert_eq!(p.original_size, "12.34 MB");
+        assert_eq!(p.compressed_size, "5.67 MB");
+        assert_eq!(p.deduplicated_size, "1.20 MB");
+        assert_eq!(p.files_count, "45");
+        assert_eq!(p.current_file, "/home/user/documentos/relatorio.pdf");
+    }
+
+    #[test]
+    fn test_parse_progress_line_with_spaces_in_filename() {
+        let line = "100.50 GB O 45.00 GB C 10.00 GB D 1024 N /mnt/backup/Meu Arquivo De Trabalho 2024 Final.docx";
+        let p = BackupProgress::parse(line);
+
+        assert_eq!(p.original_size, "100.50 GB");
+        assert_eq!(p.compressed_size, "45.00 GB");
+        assert_eq!(p.deduplicated_size, "10.00 GB");
+        assert_eq!(p.files_count, "1024");
+        assert_eq!(
+            p.current_file,
+            "/mnt/backup/Meu Arquivo De Trabalho 2024 Final.docx"
+        );
+    }
+
+    #[test]
+    fn test_parse_progress_non_standard_message() {
+        // Mensagem inicial de scanning ou aviso sem as flags O/C/D/N
+        let line = "Iniciando escaneamento de arquivos em /home/tomate...";
+        let p = BackupProgress::parse(line);
+
+        assert_eq!(p.raw_line, line);
+        assert_eq!(p.original_size, "");
+        assert_eq!(p.files_count, "");
+    }
+
+    #[test]
+    fn test_parse_json_lines_archive_entries() {
+        let json_lines = r#"
+{"type": "-", "mode": "-rw-r--r--", "user": "tomate", "group": "tomate", "uid": 1000, "gid": 1000, "size": 2048, "mtime": "2024-01-01T12:00:00.000000", "path": "docs/arquivo.txt", "healthy": true}
+{"type": "d", "mode": "drwxr-xr-x", "user": "tomate", "group": "tomate", "uid": 1000, "gid": 1000, "size": 0, "mtime": "2024-01-01T12:00:00.000000", "path": "docs", "healthy": true}
+TAM: warning message line that is not json
+{"type": "-", "path": "arquivo_minimo.txt"}
+"#;
+
+        let mut entries = Vec::new();
+        for line in json_lines.lines() {
+            if let Ok(entry) = serde_json::from_str::<ArchiveFileEntry>(line) {
+                entries.push(entry);
+            }
+        }
+
+        // Deve ter ignorado a linha de log/warning e parseado com sucesso 3 entradas válidas
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].path, "docs/arquivo.txt");
+        assert_eq!(entries[0].size, 2048);
+        assert_eq!(entries[0].entry_type, "-");
+
+        assert_eq!(entries[1].path, "docs");
+        assert_eq!(entries[1].entry_type, "d");
+
+        // Edge case: entrada JSON com campos ausentes usa #[serde(default)] sem falhar
+        assert_eq!(entries[2].path, "arquivo_minimo.txt");
+        assert_eq!(entries[2].size, 0);
+        assert_eq!(entries[2].mode, "");
     }
 }
