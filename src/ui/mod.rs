@@ -12,6 +12,7 @@ pub mod check;
 pub mod diff;
 pub mod inspect;
 pub mod popups;
+pub mod profiles;
 pub mod prune;
 pub mod repos;
 pub mod restore;
@@ -93,6 +94,9 @@ pub fn render(f: &mut Frame, app: &mut App) {
         AppState::DiffView(_) => app.t.footer_diff_view(),
         AppState::ManagingRepos => app.t.footer_managing_repos(),
         AppState::AddingRepo => app.t.footer_adding_repo(),
+        AppState::ManagingProfiles { .. } => app.t.footer_profiles(),
+        AppState::CreatingProfile(_) => app.t.footer_profile_wizard(),
+        AppState::AutomationView(_) => app.t.footer_automation_view(),
         AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => app.t.footer_popup(),
         AppState::Loading => app.t.footer_loading(),
         _ => " [Esc] ",
@@ -147,6 +151,18 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     if app.state == AppState::AddingRepo {
         repos::render_add_repo(f, app, size);
+    }
+
+    if let AppState::ManagingProfiles { .. } = app.state {
+        profiles::render_profiles_view(f, app, size);
+    }
+
+    if let AppState::CreatingProfile(_) = app.state {
+        profiles::render_profile_wizard(f, app, size);
+    }
+
+    if let AppState::AutomationView(ref state) = app.state {
+        profiles::render_automation_modal(f, app, state, size);
     }
 
     if let AppState::SuccessPopup(ref msg) = app.state {

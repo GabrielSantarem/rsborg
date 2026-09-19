@@ -52,11 +52,111 @@ pub struct RepositoryConfig {
     pub prune_policy: Option<PrunePolicy>,
 }
 
+
+fn default_compression() -> String {
+    "lz4".to_string()
+}
+
+fn default_schedule() -> String {
+    "daily".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BackupProfile {
+    pub id: String,
+    pub name: String,
+    pub paths: Vec<PathBuf>,
+    #[serde(default)]
+    pub excludes: Vec<PathBuf>,
+    #[serde(default)]
+    pub counter: u64,
+    #[serde(default = "default_compression")]
+    pub compression: String,
+    #[serde(default = "default_schedule")]
+    pub schedule: String,
+}
+
+impl BackupProfile {
+    pub fn next_archive_name(&self, now: chrono::DateTime<chrono::Local>) -> String {
+        let date_str = now.format("%Y-%m-%d_%H-%M").to_string();
+        format!("{}_#{}_{}", self.name, self.counter + 1, date_str)
+    }
+
+    pub fn generate_systemd_service(&self, repo_path: &str, passphrase: Option<&str>) -> String {
+        let mut paths_str = String::new();
+        for p in &self.paths {
+            paths_str.push_str(&format!(" \"{}\"", p.display()));
+        }
+        let mut excludes_str = String::new();
+        for e in &self.excludes {
+            excludes_str.push_str(&format!(" -e \"{}\"", e.display()));
+        }
+        let env_pass = if let Some(pass) = passphrase {
+            format!("Environment=\"BORG_PASSPHRASE={}\"\n", pass)
+        } else {
+            String::new()
+        };
+
+        format!(
+            "[Unit]\nDescription=RsBorg Automated Backup Profile: {}\nAfter=network.target\n\n[Service]\nType=oneshot\n{}ExecStart=/usr/bin/borg create --compression {} \"{}::{}_{{now}}\"{}{}\n",
+            self.name,
+            env_pass,
+            self.compression,
+            repo_path,
+            self.name,
+            excludes_str,
+            paths_str
+        )
+    }
+
+    pub fn generate_systemd_timer(&self) -> String {
+        let on_calendar = match self.schedule.as_str() {
+            "hourly" => "hourly",
+            "weekly" => "weekly",
+            "monthly" => "monthly",
+            _ => "daily",
+        };
+        format!(
+            "[Unit]\nDescription=RsBorg Timer for Profile: {}\n\n[Timer]\nOnCalendar={}\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n",
+            self.name, on_calendar
+        )
+    }
+
+    pub fn generate_crontab_line(&self, repo_path: &str, passphrase: Option<&str>) -> String {
+        let cron_time = match self.schedule.as_str() {
+            "hourly" => "0 * * * *",
+            "weekly" => "0 3 * * 0",
+            "monthly" => "0 3 1 * *",
+            _ => "0 2 * * *",
+        };
+        let mut paths_str = String::new();
+        for p in &self.paths {
+            paths_str.push_str(&format!(" \"{}\"", p.display()));
+        }
+        let mut excludes_str = String::new();
+        for e in &self.excludes {
+            excludes_str.push_str(&format!(" -e \"{}\"", e.display()));
+        }
+        let pass_prefix = if let Some(pass) = passphrase {
+            format!("BORG_PASSPHRASE=\"{}\" ", pass)
+        } else {
+            String::new()
+        };
+
+        format!(
+            "{} {}borg create --compression {} \"{}::{}_{{now}}\"{}{}",
+            cron_time, pass_prefix, self.compression, repo_path, self.name, excludes_str, paths_str
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub active_repo_id: String,
     pub language: String,
     pub repositories: Vec<RepositoryConfig>,
+    #[serde(default)]
+    pub profiles: Vec<BackupProfile>,
 }
 
 impl Default for AppConfig {
@@ -74,6 +174,7 @@ impl Default for AppConfig {
             active_repo_id: default_repo.id.clone(),
             language: "pt".to_string(),
             repositories: vec![default_repo],
+            profiles: Vec::new(),
         }
     }
 }
@@ -186,6 +287,32 @@ mod tests {
                 .to_string_lossy()
                 .contains("Restaurados/meu_backup_2026_01_01")
         );
+    }
+
+
+    #[test]
+    fn test_backup_profile_naming_and_automation() {
+        let profile = BackupProfile {
+            id: "prof-1".to_string(),
+            name: "BACKUP_DIARIO".to_string(),
+            paths: vec![PathBuf::from("/home/user/docs")],
+            excludes: vec![PathBuf::from("/home/user/docs/cache")],
+            counter: 2,
+            compression: "zstd,3".to_string(),
+            schedule: "daily".to_string(),
+        };
+
+        let now = chrono::Local::now();
+        let name = profile.next_archive_name(now);
+        assert!(name.starts_with("BACKUP_DIARIO_#3_"));
+
+        let service = profile.generate_systemd_service("/repo", Some("secret"));
+        assert!(service.contains("BORG_PASSPHRASE=secret"));
+        assert!(service.contains("--compression zstd,3"));
+
+        let cron = profile.generate_crontab_line("/repo", None);
+        assert!(cron.starts_with("0 2 * * *"));
+        assert!(cron.contains("--compression zstd,3"));
     }
 
     #[test]

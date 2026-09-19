@@ -1,8 +1,9 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
-    App, AppState, CheckResultState, CheckWizardState, CreateFocus, DiffViewState,
-    DiffWizardState, InspectState, PrunePlanState, PrunePolicyState, RestoreRequest,
+    App, AppState, AutomationViewState, CheckResultState, CheckWizardState,
+    CreateFocus, DiffViewState, DiffWizardState, InspectState, ProfileFocus,
+    PrunePlanState, PrunePolicyState, RestoreRequest,
 };
 use crate::borg::BorgCheckMode;
 use crate::config;
@@ -50,6 +51,19 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
             handle_adding_repo(app, key);
             EventOutcome::None
         }
+        AppState::ManagingProfiles { selected_index } => {
+            let idx = *selected_index;
+            handle_managing_profiles(app, key, idx);
+            EventOutcome::None
+        }
+        AppState::CreatingProfile(_) => {
+            handle_creating_profile(app, key);
+            EventOutcome::None
+        }
+        AppState::AutomationView(_) => {
+            handle_automation_view(app, key);
+            EventOutcome::None
+        }
         AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => match key.code {
             KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('s') => {
                 EventOutcome::BackToBrowsing
@@ -82,6 +96,9 @@ fn handle_browsing(app: &mut App, key: KeyEvent) {
         KeyCode::Char('j') | KeyCode::Down => app.next(),
         KeyCode::Char('k') | KeyCode::Up => app.previous(),
         KeyCode::Char('l') => app.toggle_language(),
+        KeyCode::Char('b') | KeyCode::Char('B') => {
+            app.open_profiles_view();
+        }
         KeyCode::Char('c') => {
             app.state = AppState::CreatingBackup;
             app.create_focus = CreateFocus::Name;
@@ -566,6 +583,199 @@ fn handle_diff_view(view_state: &mut DiffViewState, key: KeyEvent) -> EventOutco
     }
 }
 
+
+fn handle_managing_profiles(app: &mut App, key: KeyEvent, selected_index: usize) {
+    let count = app.config.profiles.len();
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.state = AppState::Browsing;
+        }
+        KeyCode::Up | KeyCode::Char('k') if selected_index > 0 => {
+            app.state = AppState::ManagingProfiles {
+                selected_index: selected_index - 1,
+            };
+        }
+        KeyCode::Down | KeyCode::Char('j') if count > 0 && selected_index < count.saturating_sub(1) => {
+            app.state = AppState::ManagingProfiles {
+                selected_index: selected_index + 1,
+            };
+        }
+        KeyCode::Char('a') | KeyCode::Char('A') => {
+            app.open_create_profile();
+        }
+        KeyCode::Char('d') | KeyCode::Char('D') if count > 0 => {
+            app.delete_profile(selected_index);
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            if let Some(profile) = app.config.profiles.get(selected_index).cloned() {
+                app.state = AppState::AutomationView(AutomationViewState {
+                    profile,
+                    active_tab: 0,
+                });
+            }
+        }
+        KeyCode::Enter if count > 0 => {
+            app.run_profile_backup(selected_index);
+        }
+        _ => {}
+    }
+}
+
+fn handle_creating_profile(app: &mut App, key: KeyEvent) {
+    if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('s') {
+        app.save_profile();
+        return;
+    }
+
+    if key.code == KeyCode::Esc {
+        app.state = AppState::ManagingProfiles { selected_index: 0 };
+        return;
+    }
+
+    let focus = if let AppState::CreatingProfile(ref wizard) = app.state {
+        wizard.focus
+    } else {
+        return;
+    };
+
+    if key.code == KeyCode::Tab {
+        let next_focus = match focus {
+            ProfileFocus::Name => ProfileFocus::Compression,
+            ProfileFocus::Compression => ProfileFocus::Schedule,
+            ProfileFocus::Schedule => ProfileFocus::Browser,
+            ProfileFocus::Browser => ProfileFocus::Name,
+        };
+        if let AppState::CreatingProfile(ref mut wizard) = app.state {
+            wizard.focus = next_focus;
+        }
+        return;
+    }
+
+    if key.code == KeyCode::BackTab {
+        let prev_focus = match focus {
+            ProfileFocus::Name => ProfileFocus::Browser,
+            ProfileFocus::Compression => ProfileFocus::Name,
+            ProfileFocus::Schedule => ProfileFocus::Compression,
+            ProfileFocus::Browser => ProfileFocus::Schedule,
+        };
+        if let AppState::CreatingProfile(ref mut wizard) = app.state {
+            wizard.focus = prev_focus;
+        }
+        return;
+    }
+
+    match focus {
+        ProfileFocus::Name => match key.code {
+            KeyCode::Enter => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.focus = ProfileFocus::Compression;
+                }
+            }
+            KeyCode::Backspace => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.name.pop();
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_alphanumeric() || c == '_' || c == '-' => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.name.push(c.to_ascii_uppercase());
+                }
+            }
+            _ => {}
+        },
+        ProfileFocus::Compression => match key.code {
+            KeyCode::Left | KeyCode::Char('h') => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.compression_idx = wizard.compression_idx.saturating_sub(1);
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.compression_idx = (wizard.compression_idx + 1)
+                        .min(crate::ui::profiles::COMPRESSION_OPTIONS.len().saturating_sub(1));
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.focus = ProfileFocus::Schedule;
+                }
+            }
+            _ => {}
+        },
+        ProfileFocus::Schedule => match key.code {
+            KeyCode::Left | KeyCode::Char('h') => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.schedule_idx = wizard.schedule_idx.saturating_sub(1);
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.schedule_idx = (wizard.schedule_idx + 1)
+                        .min(crate::ui::profiles::SCHEDULE_OPTIONS.len().saturating_sub(1));
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::CreatingProfile(ref mut wizard) = app.state {
+                    wizard.focus = ProfileFocus::Browser;
+                }
+            }
+            _ => {}
+        },
+        ProfileFocus::Browser => match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                app.file_browser.next();
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                app.file_browser.previous();
+            }
+            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
+                if let Some(entry) = app
+                    .file_browser
+                    .entries
+                    .get(app.file_browser.selected_index)
+                {
+                    if entry.is_parent_link {
+                        app.file_browser.go_up();
+                    } else if entry.is_dir {
+                        app.file_browser.enter_dir();
+                    }
+                }
+            }
+            KeyCode::Backspace | KeyCode::Left | KeyCode::Char('h') => {
+                app.file_browser.go_up();
+            }
+            KeyCode::Char(' ') => {
+                app.file_browser.toggle_selection();
+            }
+            _ => {}
+        },
+    }
+}
+
+fn handle_automation_view(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.state = AppState::ManagingProfiles { selected_index: 0 };
+        }
+        KeyCode::Tab => {
+            if let AppState::AutomationView(ref mut state) = app.state {
+                state.active_tab = (state.active_tab + 1) % 3;
+            }
+        }
+        KeyCode::Char('i') | KeyCode::Char('I') => {
+            let profile_opt = if let AppState::AutomationView(ref state) = app.state {
+                Some(state.profile.clone())
+            } else {
+                None
+            };
+            if let Some(profile) = profile_opt {
+                app.install_systemd_profile(&profile);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,6 +877,36 @@ mod tests {
         // Esc returns to browsing
         handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
         assert_eq!(app.state, AppState::Browsing);
+    }
+
+
+    #[test]
+    fn test_managing_profiles_navigation_and_shortcuts() {
+        let mut app = App::new();
+        app.state = AppState::Browsing;
+
+        // 'b' opens profiles view
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('b')));
+        assert_eq!(app.state, AppState::ManagingProfiles { selected_index: 0 });
+
+        // 'a' opens create profile wizard
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('a')));
+        match app.state {
+            AppState::CreatingProfile(ref wizard) => {
+                assert_eq!(wizard.focus, ProfileFocus::Name);
+            }
+            _ => panic!("Esperava CreatingProfile"),
+        }
+
+        // Tab cycles focus to Compression
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+        if let AppState::CreatingProfile(ref wizard) = app.state {
+            assert_eq!(wizard.focus, ProfileFocus::Compression);
+        }
+
+        // Esc returns to ManagingProfiles
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.state, AppState::ManagingProfiles { selected_index: 0 });
     }
 
     #[test]

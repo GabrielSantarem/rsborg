@@ -100,6 +100,29 @@ pub struct DiffWizardState {
     pub content_only: bool,
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileFocus {
+    Name,
+    Compression,
+    Schedule,
+    Browser,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileWizardState {
+    pub focus: ProfileFocus,
+    pub name: String,
+    pub compression_idx: usize,
+    pub schedule_idx: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutomationViewState {
+    pub profile: crate::config::BackupProfile,
+    pub active_tab: usize,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiffViewState {
     pub archive1: String,
@@ -128,6 +151,9 @@ pub enum AppState {
     CheckResultView(CheckResultState),
     DiffWizard(DiffWizardState),
     DiffView(DiffViewState),
+    ManagingProfiles { selected_index: usize },
+    CreatingProfile(ProfileWizardState),
+    AutomationView(AutomationViewState),
 }
 
 #[derive(Debug, PartialEq)]

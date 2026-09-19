@@ -378,12 +378,14 @@ impl BorgManager {
         Ok(list)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_backup_with_progress<F>(
         &self,
         repo_path: &str,
         archive_name: &str,
         paths: Vec<String>,
         excludes: Vec<String>,
+        compression: Option<&str>,
         passphrase: Option<&str>,
         mut on_progress: F,
     ) -> Result<(), String>
@@ -419,8 +421,14 @@ impl BorgManager {
             "create".to_string(),
             "--progress".to_string(),
             "--stats".to_string(),
-            archive_target,
         ];
+
+        if let Some(comp) = compression.filter(|c| !c.is_empty()) {
+            cmd_args.push("--compression".to_string());
+            cmd_args.push(comp.to_string());
+        }
+
+        cmd_args.push(archive_target);
 
         cmd_args.extend(paths);
 

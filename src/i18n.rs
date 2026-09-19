@@ -67,10 +67,10 @@ impl Translator {
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
             Language::Pt => {
-                " [c] Criar | [Enter] Inspecionar | [f] Diff | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
+                " [c] Criar | [b] Perfis | [Enter] Inspecionar | [f] Diff | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
             }
             Language::En => {
-                " [c] Create | [Enter] Inspect | [f] Diff | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
+                " [c] Create | [b] Profiles | [Enter] Inspect | [f] Diff | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
             }
         }
     }
@@ -147,6 +147,27 @@ impl Translator {
             Language::En => " [Esc / Enter] Close ",
         }
     }
+    pub fn footer_profiles(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Enter] Executar Backup | [a] Novo Perfil | [s] Automação Systemd/Cron | [d] Excluir | [Esc] Voltar ",
+            Language::En => " [Enter] Run Backup Now | [a] New Profile | [s] Systemd/Cron Automation | [d] Delete | [Esc] Back ",
+        }
+    }
+
+    pub fn footer_profile_wizard(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Tab] Campo | [←/→] Opção | [Espaço] Incluir | [e] Excluir | [Ctrl+S] Salvar | [Esc] Cancelar ",
+            Language::En => " [Tab] Field | [←/→] Option | [Space] Include | [e] Exclude | [Ctrl+S] Save | [Esc] Cancel ",
+        }
+    }
+
+    pub fn footer_automation_view(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Tab] Alternar Aba | [i] Instalar no Systemd User | [Esc] Voltar ",
+            Language::En => " [Tab] Switch Tab | [i] Install to Systemd User | [Esc] Back ",
+        }
+    }
+
 
     pub fn footer_loading(&self) -> &'static str {
         match self.lang {
@@ -1125,6 +1146,83 @@ impl Translator {
             Language::En => format!("Comparing '{}' with '{}'...", a1, a2),
         }
     }
+    // --- 13. Perfis e Automação de Backup ---
+    pub fn profiles_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Conjuntos e Perfis de Backup Automático ",
+            Language::En => " Automated Backup Sets & Profiles ",
+        }
+    }
+
+    pub fn profiles_empty(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Nenhum conjunto cadastrado ainda. Pressione [a] para criar seu primeiro perfil de backup!",
+            Language::En => "No backup profiles registered yet. Press [a] to create your first backup profile!",
+        }
+    }
+
+    pub fn profile_details_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Detalhes do Perfil Selecionado ",
+            Language::En => " Selected Profile Details ",
+        }
+    }
+
+    pub fn profile_wizard_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Criar Novo Conjunto de Backup ",
+            Language::En => " Create New Backup Profile ",
+        }
+    }
+
+    pub fn profile_name_label(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "1. Nome do Conjunto (ex: BACKUP_DIARIO, FOTOS):",
+            Language::En => "1. Profile Name (e.g. BACKUP_DIARIO, PHOTOS):",
+        }
+    }
+
+    pub fn profile_compression_label(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "2. Algoritmo de Compressão ([←/→] para alternar):",
+            Language::En => "2. Compression Algorithm ([←/→] to switch):",
+        }
+    }
+
+    pub fn profile_schedule_label(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "3. Agendamento Frequência ([←/→] para alternar):",
+            Language::En => "3. Schedule Frequency ([←/→] to switch):",
+        }
+    }
+
+    pub fn profile_paths_label(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "4. Selecionar Pastas e Arquivos ([Espaço] inclui / [e] exclui):",
+            Language::En => "4. Select Folders & Files ([Space] include / [e] exclude):",
+        }
+    }
+
+    pub fn profile_next_archive_fmt(&self, name: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Próximo arquivo que será criado: {}", name),
+            Language::En => format!("Next archive that will be created: {}", name),
+        }
+    }
+
+    pub fn automation_installed_msg(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Arquivos Systemd criados com sucesso em ~/.config/systemd/user/!",
+            Language::En => "Systemd files successfully created in ~/.config/systemd/user/!",
+        }
+    }
+
+    pub fn profile_save_prompt(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Ctrl+S] Salvar Perfil      [Esc] Cancelar ",
+            Language::En => " [Ctrl+S] Save Profile      [Esc] Cancel ",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1153,6 +1251,10 @@ mod tests {
         assert_ne!(t_pt.diff_view_title(), t_en.diff_view_title());
         assert_ne!(t_pt.diff_badge_added(), t_en.diff_badge_added());
         assert_ne!(t_pt.diff_badge_removed(), t_en.diff_badge_removed());
+        assert_ne!(t_pt.profiles_title(), t_en.profiles_title());
+        assert_ne!(t_pt.profiles_empty(), t_en.profiles_empty());
+        assert_ne!(t_pt.profile_wizard_title(), t_en.profile_wizard_title());
+        assert_ne!(t_pt.footer_profiles(), t_en.footer_profiles());
     }
 
     #[test]
