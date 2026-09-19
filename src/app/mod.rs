@@ -1258,6 +1258,7 @@ mod tests {
     #[test]
     fn test_profile_creation_and_run() {
         let mut app = App::new();
+        app.config.profiles.clear();
         app.open_create_profile();
         match app.state {
             AppState::CreatingProfile(ref wizard) => {
