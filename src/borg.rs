@@ -48,6 +48,122 @@ pub enum BorgCheckMode {
     Repair,
 }
 
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
+pub enum DiffChangeItem {
+    #[serde(rename = "added")]
+    Added {
+        #[serde(default)]
+        size: u64,
+    },
+    #[serde(rename = "removed")]
+    Removed {
+        #[serde(default)]
+        size: u64,
+    },
+    #[serde(rename = "modified")]
+    Modified {
+        #[serde(default)]
+        added: u64,
+        #[serde(default)]
+        removed: u64,
+    },
+    #[serde(rename = "mode")]
+    Mode {
+        #[serde(default)]
+        old_mode: Option<String>,
+        #[serde(default)]
+        new_mode: Option<String>,
+    },
+    #[serde(rename = "owner")]
+    Owner {
+        #[serde(default)]
+        old_user: Option<String>,
+        #[serde(default)]
+        new_user: Option<String>,
+        #[serde(default)]
+        old_group: Option<String>,
+        #[serde(default)]
+        new_group: Option<String>,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffKind {
+    Added,
+    Removed,
+    Modified,
+    Metadata,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct DiffEntry {
+    pub path: String,
+    #[serde(default)]
+    pub changes: Vec<DiffChangeItem>,
+}
+
+impl DiffEntry {
+    pub fn kind(&self) -> DiffKind {
+        for change in &self.changes {
+            match change {
+                DiffChangeItem::Added { .. } => return DiffKind::Added,
+                DiffChangeItem::Removed { .. } => return DiffKind::Removed,
+                DiffChangeItem::Modified { .. } => return DiffKind::Modified,
+                _ => {}
+            }
+        }
+        DiffKind::Metadata
+    }
+
+    pub fn formatted_change(&self) -> String {
+        for change in &self.changes {
+            match change {
+                DiffChangeItem::Added { size } => {
+                    return format!("+{}", format_bytes(*size));
+                }
+                DiffChangeItem::Removed { size } => {
+                    return format!("-{}", format_bytes(*size));
+                }
+                DiffChangeItem::Modified { added, removed } => {
+                    return format!("+{} / -{}", format_bytes(*added), format_bytes(*removed));
+                }
+                DiffChangeItem::Mode { old_mode, new_mode } => {
+                    let old = old_mode.as_deref().unwrap_or("?");
+                    let new = new_mode.as_deref().unwrap_or("?");
+                    return format!("mode: {} -> {}", old, new);
+                }
+                DiffChangeItem::Owner { old_user, new_user, .. } => {
+                    let old = old_user.as_deref().unwrap_or("?");
+                    let new = new_user.as_deref().unwrap_or("?");
+                    return format!("owner: {} -> {}", old, new);
+                }
+                DiffChangeItem::Other => {}
+            }
+        }
+        "-".to_string()
+    }
+}
+
+pub fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} kB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckResult {
     pub success: bool,
@@ -680,6 +796,97 @@ impl BorgManager {
             log_output,
         })
     }
+
+    pub fn diff_archives<F>(
+        &self,
+        repo_path: &str,
+        archive1: &str,
+        archive2: &str,
+        content_only: bool,
+        passphrase: Option<&str>,
+        mut on_line: F,
+    ) -> Result<Vec<DiffEntry>, String>
+    where
+        F: FnMut(String),
+    {
+        if repo_path == "/caminho/para/meu/repo" {
+            let mock_entries = vec![
+                DiffEntry {
+                    path: "home/user/documentos/relatorio.pdf".to_string(),
+                    changes: vec![DiffChangeItem::Modified {
+                        added: 24500,
+                        removed: 12000,
+                    }],
+                },
+                DiffEntry {
+                    path: "home/user/documentos/novo_arquivo.txt".to_string(),
+                    changes: vec![DiffChangeItem::Added { size: 1024 }],
+                },
+                DiffEntry {
+                    path: "home/user/documentos/arquivo_antigo.bak".to_string(),
+                    changes: vec![DiffChangeItem::Removed { size: 4096 }],
+                },
+            ];
+            for entry in &mock_entries {
+                on_line(entry.path.clone());
+            }
+            return Ok(mock_entries);
+        }
+
+        let target1 = format!("{}::{}", repo_path, archive1);
+        let mut args: Vec<String> = vec![
+            "diff".to_string(),
+            "--json-lines".to_string(),
+        ];
+
+        if content_only {
+            args.push("--content-only".to_string());
+        }
+
+        args.push(target1);
+        args.push(archive2.to_string());
+
+        let arg_slices: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let mut cmd = self.prepare_command(&arg_slices, passphrase);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Falha ao iniciar processo borg diff: {}", e))?;
+
+        let mut entries = Vec::new();
+
+        if let Some(stdout) = child.stdout.take() {
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(stdout);
+            for line in reader.lines().map_while(Result::ok) {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                if let Ok(entry) = serde_json::from_str::<DiffEntry>(trimmed) {
+                    on_line(entry.path.clone());
+                    entries.push(entry);
+                }
+            }
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("Erro ao aguardar processo borg diff: {}", e))?;
+
+        if !status.success() {
+            let mut err_msg = String::new();
+            if let Some(mut stderr) = child.stderr.take() {
+                let _ = stderr.read_to_string(&mut err_msg);
+            }
+            return Err(format!("Erro ao comparar backups:
+{}", err_msg));
+        }
+
+        Ok(entries)
+    }
 }
 
 #[cfg(test)]
@@ -816,6 +1023,29 @@ TAM: warning message line that is not json
         assert!(!item.will_keep);
     }
 
+
+
+    #[test]
+    fn test_diff_archives_mock() {
+        let manager = BorgManager::new();
+        let mut lines = Vec::new();
+        let res = manager.diff_archives(
+            "/caminho/para/meu/repo",
+            "b1",
+            "b2",
+            false,
+            None,
+            |line| lines.push(line),
+        );
+
+        assert!(res.is_ok());
+        let entries = res.unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].kind(), DiffKind::Modified);
+        assert_eq!(entries[1].kind(), DiffKind::Added);
+        assert_eq!(entries[2].kind(), DiffKind::Removed);
+        assert_eq!(lines.len(), 3);
+    }
 
     #[test]
     fn test_check_repository_mock() {

@@ -1,4 +1,6 @@
-use crate::borg::{ArchiveFileEntry, BackupProgress, BorgCheckMode, CheckResult, PruneArchiveItem};
+use crate::borg::{
+    ArchiveFileEntry, BackupProgress, BorgCheckMode, CheckResult, DiffEntry, PruneArchiveItem,
+};
 use crate::config::PrunePolicy;
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -90,6 +92,22 @@ pub struct CheckResultState {
     pub log_scroll: usize,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiffWizardState {
+    pub base_archive: String,
+    pub candidates: Vec<String>,
+    pub selected_candidate_idx: usize,
+    pub content_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiffViewState {
+    pub archive1: String,
+    pub archive2: String,
+    pub entries: Vec<DiffEntry>,
+    pub selected_index: usize,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AppState {
     Initializing,
@@ -108,6 +126,8 @@ pub enum AppState {
     PrunePlanView(PrunePlanState),
     CheckWizard(CheckWizardState),
     CheckResultView(CheckResultState),
+    DiffWizard(DiffWizardState),
+    DiffView(DiffViewState),
 }
 
 #[derive(Debug, PartialEq)]
@@ -125,5 +145,6 @@ pub enum ThreadStatus {
     DonePruneDryRun(Result<Vec<PruneArchiveItem>, String>, PrunePolicy),
     DonePruneExecute(Result<usize, String>),
     DoneCheck(Result<CheckResult, String>, String, String),
+    DoneDiff(Result<Vec<DiffEntry>, String>, String, String),
     Error(String),
 }

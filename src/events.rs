@@ -1,8 +1,8 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
-    App, AppState, CheckResultState, CheckWizardState, CreateFocus, InspectState,
-    PrunePlanState, PrunePolicyState, RestoreRequest,
+    App, AppState, CheckResultState, CheckWizardState, CreateFocus, DiffViewState,
+    DiffWizardState, InspectState, PrunePlanState, PrunePolicyState, RestoreRequest,
 };
 use crate::borg::BorgCheckMode;
 use crate::config;
@@ -16,6 +16,7 @@ enum EventOutcome {
     ExecutePruneDryRun,
     ConfirmExecutePrune,
     StartCheck,
+    StartDiff,
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent) {
@@ -39,6 +40,8 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         AppState::PrunePlanView(plan_state) => handle_prune_plan_view(plan_state, key),
         AppState::CheckWizard(wizard_state) => handle_check_wizard(wizard_state, key),
         AppState::CheckResultView(result_state) => handle_check_result_view(result_state, key),
+        AppState::DiffWizard(wizard_state) => handle_diff_wizard(wizard_state, key),
+        AppState::DiffView(view_state) => handle_diff_view(view_state, key),
         AppState::ManagingRepos => {
             handle_managing_repos(app, key);
             EventOutcome::None
@@ -69,6 +72,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         EventOutcome::ExecutePruneDryRun => app.execute_prune_dry_run(),
         EventOutcome::ConfirmExecutePrune => app.confirm_execute_prune(),
         EventOutcome::StartCheck => app.start_check(),
+        EventOutcome::StartDiff => app.start_diff(),
     }
 }
 
@@ -85,6 +89,9 @@ fn handle_browsing(app: &mut App, key: KeyEvent) {
             app.file_browser.explicit_includes.clear();
             app.file_browser.explicit_excludes.clear();
             app.file_browser.load_entries();
+        }
+        KeyCode::Char('f') | KeyCode::Char('F') => {
+            app.open_diff_wizard();
         }
         KeyCode::Char('v') | KeyCode::Char('V') => {
             app.open_check_wizard();
@@ -494,6 +501,71 @@ fn handle_check_result_view(result_state: &mut CheckResultState, key: KeyEvent) 
     }
 }
 
+
+fn handle_diff_wizard(wizard_state: &mut DiffWizardState, key: KeyEvent) -> EventOutcome {
+    match key.code {
+        KeyCode::Esc => EventOutcome::BackToBrowsing,
+        KeyCode::Tab => {
+            wizard_state.content_only = !wizard_state.content_only;
+            EventOutcome::None
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if !wizard_state.candidates.is_empty() {
+                if wizard_state.selected_candidate_idx == 0 {
+                    wizard_state.selected_candidate_idx =
+                        wizard_state.candidates.len().saturating_sub(1);
+                } else {
+                    wizard_state.selected_candidate_idx -= 1;
+                }
+            }
+            EventOutcome::None
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if !wizard_state.candidates.is_empty() {
+                if wizard_state.selected_candidate_idx
+                    >= wizard_state.candidates.len().saturating_sub(1)
+                {
+                    wizard_state.selected_candidate_idx = 0;
+                } else {
+                    wizard_state.selected_candidate_idx += 1;
+                }
+            }
+            EventOutcome::None
+        }
+        KeyCode::Enter => EventOutcome::StartDiff,
+        _ => EventOutcome::None,
+    }
+}
+
+fn handle_diff_view(view_state: &mut DiffViewState, key: KeyEvent) -> EventOutcome {
+    let total = view_state.entries.len();
+    match key.code {
+        KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => EventOutcome::BackToBrowsing,
+        KeyCode::Down | KeyCode::Char('j') => {
+            if total > 0 && view_state.selected_index < total.saturating_sub(1) {
+                view_state.selected_index += 1;
+            }
+            EventOutcome::None
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            view_state.selected_index = view_state.selected_index.saturating_sub(1);
+            EventOutcome::None
+        }
+        KeyCode::PageDown => {
+            if total > 0 {
+                view_state.selected_index =
+                    (view_state.selected_index + 10).min(total.saturating_sub(1));
+            }
+            EventOutcome::None
+        }
+        KeyCode::PageUp => {
+            view_state.selected_index = view_state.selected_index.saturating_sub(10);
+            EventOutcome::None
+        }
+        _ => EventOutcome::None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -567,6 +639,61 @@ mod tests {
 
         // Esc should exit
         handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.state, AppState::Browsing);
+    }
+
+    #[test]
+    fn test_diff_wizard_navigation_and_toggle() {
+        let mut app = App::new();
+        app.state = AppState::DiffWizard(DiffWizardState {
+            base_archive: "base".to_string(),
+            candidates: vec!["cand1".to_string(), "cand2".to_string()],
+            selected_candidate_idx: 0,
+            content_only: false,
+        });
+
+        // Tab toggles content_only
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+        if let AppState::DiffWizard(ref state) = app.state {
+            assert!(state.content_only);
+        }
+
+        // Down moves to candidate 1
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+        if let AppState::DiffWizard(ref state) = app.state {
+            assert_eq!(state.selected_candidate_idx, 1);
+        }
+
+        // Esc returns to browsing
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.state, AppState::Browsing);
+    }
+
+    #[test]
+    fn test_diff_view_navigation() {
+        let mut app = App::new();
+        app.state = AppState::DiffView(DiffViewState {
+            archive1: "a1".to_string(),
+            archive2: "a2".to_string(),
+            entries: vec![
+                crate::borg::DiffEntry {
+                    path: "p1".to_string(),
+                    changes: vec![],
+                },
+                crate::borg::DiffEntry {
+                    path: "p2".to_string(),
+                    changes: vec![],
+                },
+            ],
+            selected_index: 0,
+        });
+
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+        if let AppState::DiffView(ref state) = app.state {
+            assert_eq!(state.selected_index, 1);
+        }
+
+        handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('q')));
         assert_eq!(app.state, AppState::Browsing);
     }
 }

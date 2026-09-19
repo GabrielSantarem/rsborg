@@ -659,6 +659,93 @@ impl App {
         }
     }
 
+    pub fn open_diff_wizard(&mut self) {
+        if self.archives.len() < 2 {
+            self.state = AppState::ErrorPopup(self.t.diff_err_need_two().to_string());
+            return;
+        }
+
+        let selected_idx = self.table_state.selected().unwrap_or(0);
+        let base_archive = match self.archives.get(selected_idx) {
+            Some(a) => a.name.clone(),
+            None => self.archives[0].name.clone(),
+        };
+
+        let candidates: Vec<String> = self
+            .archives
+            .iter()
+            .map(|a| a.name.clone())
+            .filter(|name| name != &base_archive)
+            .collect();
+
+        if candidates.is_empty() {
+            self.state = AppState::ErrorPopup(self.t.diff_err_need_two().to_string());
+            return;
+        }
+
+        self.state = AppState::DiffWizard(DiffWizardState {
+            base_archive,
+            candidates,
+            selected_candidate_idx: 0,
+            content_only: false,
+        });
+    }
+
+    pub fn start_diff(&mut self) {
+        if let AppState::DiffWizard(ref wizard_state) = self.state {
+            let base = wizard_state.base_archive.clone();
+            let target = match wizard_state.candidates.get(wizard_state.selected_candidate_idx) {
+                Some(name) => name.clone(),
+                None => return,
+            };
+            let content_only = wizard_state.content_only;
+
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            self.loading_info = LoadingInfo {
+                message: self.t.loading_diffing_fmt(&base, &target),
+                elapsed_secs: 0,
+                original_size: "-".to_string(),
+                compressed_size: "-".to_string(),
+                deduplicated_size: "-".to_string(),
+                files_count: "0".to_string(),
+                current_file: "Iniciando comparação borg diff...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            let tx = self.tx.clone();
+            let manager = BorgManager::new();
+            let b_clone = base.clone();
+            let t_clone = target.clone();
+
+            thread::spawn(move || {
+                let tx_prog = tx.clone();
+                let res = manager.diff_archives(
+                    &repo_path,
+                    &base,
+                    &target,
+                    content_only,
+                    passphrase.as_deref(),
+                    move |line| {
+                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                            current_file: line.clone(),
+                            raw_line: line,
+                            ..Default::default()
+                        }));
+                    },
+                );
+
+                let _ = tx.send(ThreadStatus::DoneDiff(res, b_clone, t_clone));
+            });
+        }
+    }
+
     pub fn switch_active_repo(&mut self, repo_id: String) {
         self.config.active_repo_id = repo_id;
         let _ = config::save_config(&self.config);
@@ -811,6 +898,22 @@ impl App {
                         }
                     }
                 }
+                ThreadStatus::DoneDiff(res, archive1, archive2) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(entries) => {
+                            self.state = AppState::DiffView(DiffViewState {
+                                archive1,
+                                archive2,
+                                entries,
+                                selected_index: 0,
+                            });
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
                 ThreadStatus::Error(e) => {
                     self.loading_start = None;
                     self.state = AppState::ErrorPopup(e);
@@ -875,7 +978,7 @@ mod tests {
         app.validate_and_submit_backup();
 
         match app.state {
-            AppState::ErrorPopup(msg) => {
+            AppState::ErrorPopup(ref msg) => {
                 assert!(msg.contains("não pode ser vazio") || msg.contains("cannot be empty"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter nome vazio"),
@@ -892,7 +995,7 @@ mod tests {
         app.validate_and_submit_backup();
 
         match app.state {
-            AppState::ErrorPopup(msg) => {
+            AppState::ErrorPopup(ref msg) => {
                 assert!(msg.contains("caracteres reservados") || msg.contains("reserved characters"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter nome com caracteres reservados"),
@@ -907,7 +1010,7 @@ mod tests {
         app.validate_and_submit_backup();
 
         match app.state {
-            AppState::ErrorPopup(msg) => {
+            AppState::ErrorPopup(ref msg) => {
                 assert!(msg.contains("precisa selecionar") || msg.contains("must select"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter sem arquivos selecionados"),
@@ -971,13 +1074,56 @@ mod tests {
 
         app.umount_selected_archive();
         match app.state {
-            AppState::ErrorPopup(msg) => {
+            AppState::ErrorPopup(ref msg) => {
                 assert!(msg.contains("não está montado") || msg.contains("not mounted"));
             }
             _ => panic!("Esperava ErrorPopup avisando que não está montado"),
         }
     }
 
+
+
+    #[test]
+    fn test_open_diff_wizard_requires_two_archives() {
+        let mut app = App::new();
+        app.archives.clear();
+        app.open_diff_wizard();
+        match app.state {
+            AppState::ErrorPopup(ref msg) => {
+                assert!(msg.contains("2 backups") || msg.contains("at least 2"));
+            }
+            _ => panic!("Esperava ErrorPopup quando há menos de 2 backups"),
+        }
+
+        app.archives.push(BackupArchive {
+            archive: "b1".to_string(),
+            barchive: "b1".to_string(),
+            id: "1".to_string(),
+            name: "b1".to_string(),
+            start: "2023-01-01".to_string(),
+            time: "2023-01-01".to_string(),
+        });
+        app.archives.push(BackupArchive {
+            archive: "b2".to_string(),
+            barchive: "b2".to_string(),
+            id: "2".to_string(),
+            name: "b2".to_string(),
+            start: "2023-01-02".to_string(),
+            time: "2023-01-02".to_string(),
+        });
+        app.table_state.select(Some(0));
+        app.open_diff_wizard();
+
+        match app.state {
+            AppState::DiffWizard(ref wizard) => {
+                assert_eq!(wizard.base_archive, "b1");
+                assert_eq!(wizard.candidates, vec!["b2"]);
+                assert_eq!(wizard.selected_candidate_idx, 0);
+                assert!(!wizard.content_only);
+            }
+            _ => panic!("Esperava DiffWizard com 2 backups"),
+        }
+    }
 
     #[test]
     fn test_open_check_wizard_and_mode() {

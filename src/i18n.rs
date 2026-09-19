@@ -67,10 +67,10 @@ impl Translator {
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
             Language::Pt => {
-                " [c] Criar | [Enter] Inspecionar | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
+                " [c] Criar | [Enter] Inspecionar | [f] Diff | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
             }
             Language::En => {
-                " [c] Create | [Enter] Inspect | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
+                " [c] Create | [Enter] Inspect | [f] Diff | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
             }
         }
     }
@@ -985,6 +985,146 @@ impl Translator {
             Language::En => format!("Checking integrity on '{}'...", target),
         }
     }
+    // --- 12. Comparação de Versões (Borg Diff) ---
+    pub fn diff_wizard_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Comparação entre Backups (Borg Diff) ",
+            Language::En => " Backup Comparison (Borg Diff) ",
+        }
+    }
+
+    pub fn diff_base_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "1. Backup Base (Origem / Mais Antigo)",
+            Language::En => "1. Base Backup (Source / Older)",
+        }
+    }
+
+    pub fn diff_target_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "2. Backup Alvo para Comparação ([↑/↓] para escolher)",
+            Language::En => "2. Target Backup to Compare ([↑/↓] to select)",
+        }
+    }
+
+    pub fn diff_option_content_only(&self, active: bool) -> String {
+        let check = if active { "[X]" } else { "[ ]" };
+        match self.lang {
+            Language::Pt => format!("{} [Tab] Comparar apenas conteúdo de arquivos (ignorar metadados/permissões)", check),
+            Language::En => format!("{} [Tab] Compare file content only (ignore metadata/permissions)", check),
+        }
+    }
+
+    pub fn diff_start_prompt(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [Enter] Comparar Alterações      [Esc] Cancelar ",
+            Language::En => " [Enter] Compare Changes      [Esc] Cancel ",
+        }
+    }
+
+    pub fn diff_view_title(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " Relatório de Alterações (Diff) ",
+            Language::En => " Changes Report (Diff) ",
+        }
+    }
+
+    pub fn diff_summary_fmt(&self, added: usize, removed: usize, modified: usize, meta: usize) -> String {
+        match self.lang {
+            Language::Pt => format!(
+                "+{} Adicionados | -{} Removidos | ~{} Modificados | {} Metadados | Total: {} alterações",
+                added, removed, modified, meta, added + removed + modified + meta
+            ),
+            Language::En => format!(
+                "+{} Added | -{} Removed | ~{} Modified | {} Metadata | Total: {} changes",
+                added, removed, modified, meta, added + removed + modified + meta
+            ),
+        }
+    }
+
+    pub fn diff_col_type(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Tipo",
+            Language::En => "Type",
+        }
+    }
+
+    pub fn diff_col_change(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Variação / Detalhes",
+            Language::En => "Change / Details",
+        }
+    }
+
+    pub fn diff_col_path(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Caminho do Arquivo",
+            Language::En => "File Path",
+        }
+    }
+
+    pub fn diff_badge_added(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "[+ NOVO]",
+            Language::En => "[+ ADDED]",
+        }
+    }
+
+    pub fn diff_badge_removed(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "[- REMOVIDO]",
+            Language::En => "[- REMOVED]",
+        }
+    }
+
+    pub fn diff_badge_modified(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "[~ MODIFICADO]",
+            Language::En => "[~ MODIFIED]",
+        }
+    }
+
+    pub fn diff_badge_metadata(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "[⚙ METADADOS]",
+            Language::En => "[⚙ METADATA]",
+        }
+    }
+
+    pub fn diff_no_changes(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Nenhuma alteração detectada entre estes backups (conteúdo e metadados idênticos).",
+            Language::En => "No changes detected between these backups (content and metadata are identical).",
+        }
+    }
+
+    pub fn diff_err_need_two(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => "Você precisa de pelo menos 2 backups para realizar uma comparação!",
+            Language::En => "You need at least 2 backups to perform a comparison!",
+        }
+    }
+
+    pub fn footer_diff_wizard(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [↑/↓] Selecionar Alvo | [Tab] Conteúdo apenas | [Enter] Comparar | [Esc] Cancelar ",
+            Language::En => " [↑/↓] Select Target | [Tab] Content only | [Enter] Compare | [Esc] Cancel ",
+        }
+    }
+
+    pub fn footer_diff_view(&self) -> &'static str {
+        match self.lang {
+            Language::Pt => " [j/k/Setas] Navegar Alterações | [Esc / Enter] Voltar ",
+            Language::En => " [j/k/Arrows] Navigate Changes | [Esc / Enter] Back ",
+        }
+    }
+
+    pub fn loading_diffing_fmt(&self, a1: &str, a2: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Comparando '{}' com '{}'...", a1, a2),
+            Language::En => format!("Comparing '{}' with '{}'...", a1, a2),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1009,6 +1149,10 @@ mod tests {
         assert_ne!(t_pt.restore_wizard_title(), t_en.restore_wizard_title());
         assert_ne!(t_pt.prune_policy_title(), t_en.prune_policy_title());
         assert_ne!(t_pt.repos_title(), t_en.repos_title());
+        assert_ne!(t_pt.diff_wizard_title(), t_en.diff_wizard_title());
+        assert_ne!(t_pt.diff_view_title(), t_en.diff_view_title());
+        assert_ne!(t_pt.diff_badge_added(), t_en.diff_badge_added());
+        assert_ne!(t_pt.diff_badge_removed(), t_en.diff_badge_removed());
     }
 
     #[test]
@@ -1021,6 +1165,11 @@ mod tests {
         assert!(pt_fuse.contains("Sim (em /mnt/test)"));
         assert!(en_fuse.contains("Yes (at /mnt/test)"));
 
+
+        let pt_diff = t_pt.diff_summary_fmt(1, 2, 3, 4);
+        let en_diff = t_en.diff_summary_fmt(1, 2, 3, 4);
+        assert!(pt_diff.contains("Total: 10 alterações"));
+        assert!(en_diff.contains("Total: 10 changes"));
         let pt_del = t_pt.loading_deleting_fmt("archive1");
         let en_del = t_en.loading_deleting_fmt("archive1");
         assert!(pt_del.contains("Apagando backup 'archive1'"));
