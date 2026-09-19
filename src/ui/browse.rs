@@ -61,18 +61,17 @@ pub fn render(f: &mut Frame, app: &mut App, area: Rect) {
     if let Some(i) = app.table_state.selected() {
         if let Some(archive) = app.archives.get(i) {
             let mount_status = match app.mounted_archives.get(&archive.name) {
-                Some(path) => format!("Sim (em {})", path.display()),
-                None => "Não montado".to_string(),
+                Some(path) => app.t.fuse_mounted_fmt(&path.display().to_string()),
+                None => app.t.fuse_not_mounted().to_string(),
             };
 
-            let md_text = format!(
-                "ID: {}\nNome: {}\nArquivo Original: {}\n\nData de Criação: {}\nFinalizado em: {}\n\nMontagem FUSE: {}\n\n[p] Limpeza / Prune\n[x] Restaurar este backup\n[m] Montar pasta FUSE\n[u] Desmontar pasta",
-                archive.id,
-                archive.name,
-                archive.archive,
-                archive.start,
-                archive.time,
-                mount_status
+            let md_text = app.t.metadata_content_fmt(
+                &archive.id,
+                &archive.name,
+                &archive.archive,
+                &archive.start,
+                &archive.time,
+                &mount_status,
             );
             let p = Paragraph::new(md_text).block(
                 Block::default()
@@ -82,7 +81,7 @@ pub fn render(f: &mut Frame, app: &mut App, area: Rect) {
             f.render_widget(p, body_chunks[1]);
         }
     } else {
-        let p = Paragraph::new("Nenhum backup selecionado").block(
+        let p = Paragraph::new(app.t.no_backup_selected()).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(app.t.metadata_title()),

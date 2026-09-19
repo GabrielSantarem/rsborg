@@ -15,7 +15,7 @@ pub fn render(f: &mut Frame, app: &mut App, screen_area: Rect) {
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Assistente de Backup / Backup Wizard ")
+        .title(app.t.backup_wizard_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Yellow));
     let inner_area = block.inner(area);
@@ -50,26 +50,29 @@ pub fn render(f: &mut Frame, app: &mut App, screen_area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("1. Nome do Backup (digite e aperte Tab para ir aos arquivos)"),
+                .title(app.t.backup_name_field_title()),
         );
     f.render_widget(n, input_chunks[0]);
 
     let legend = Line::from(vec![
-        Span::styled("Legenda: ", Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
-            "[+] Incluído ",
+            app.t.legend_label(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            app.t.legend_included(),
             Style::default()
                 .fg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("[✓] Herdado ", Style::default().fg(Color::Cyan)),
+        Span::styled(app.t.legend_inherited(), Style::default().fg(Color::Cyan)),
         Span::styled(
-            "[-] Excluído ",
+            app.t.legend_excluded(),
             Style::default()
                 .fg(Color::LightRed)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("[ ] Não selecionado ", Style::default().fg(Color::Gray)),
+        Span::styled(app.t.legend_unselected(), Style::default().fg(Color::Gray)),
     ]);
     let legend_p = Paragraph::new(legend);
     f.render_widget(legend_p, input_chunks[1]);
@@ -77,10 +80,7 @@ pub fn render(f: &mut Frame, app: &mut App, screen_area: Rect) {
     let browser_h = app.file_browser.current_dir.to_string_lossy();
     let b_block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(
-            " 2. Selecionar Arquivos / Pastas  [{}] ",
-            browser_h
-        ))
+        .title(app.t.file_browser_title_fmt(&browser_h))
         .style(b_sty);
 
     let items: Vec<ListItem> = app
@@ -95,13 +95,23 @@ pub fn render(f: &mut Frame, app: &mut App, screen_area: Rect) {
             let icon = if entry.is_dir { "📁" } else { "📄" };
 
             let (prefix, status_text, color) = if entry.is_parent_link {
-                ("[ ⮥ ]", "", Color::Yellow)
+                ("[ ⏎ ]", "", Color::Yellow)
             } else {
                 match app.file_browser.get_status(&entry.path) {
-                    ItemStatus::ExplicitInclude => ("[ + ]", " (Incluído)", Color::LightGreen),
-                    ItemStatus::InheritedInclude => ("[ ✓ ]", " (Herdado do pai)", Color::Cyan),
-                    ItemStatus::ExplicitExclude => ("[ - ]", " (Excluído)", Color::LightRed),
-                    ItemStatus::InheritedExclude => ("[ x ]", " (Pai excluído)", Color::DarkGray),
+                    ItemStatus::ExplicitInclude => {
+                        ("[ + ]", app.t.item_status_included(), Color::LightGreen)
+                    }
+                    ItemStatus::InheritedInclude => {
+                        ("[ ✓ ]", app.t.item_status_inherited(), Color::Cyan)
+                    }
+                    ItemStatus::ExplicitExclude => {
+                        ("[ - ]", app.t.item_status_excluded(), Color::LightRed)
+                    }
+                    ItemStatus::InheritedExclude => (
+                        "[ x ]",
+                        app.t.item_status_parent_excluded(),
+                        Color::DarkGray,
+                    ),
                     ItemStatus::Neutral => ("[   ]", "", Color::White),
                 }
             };

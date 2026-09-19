@@ -8,13 +8,19 @@ use ratatui::{
 
 use super::centered_rect;
 use crate::app::{PrunePlanState, PrunePolicyState};
+use crate::i18n::Translator;
 
-pub fn render_policy_modal(f: &mut Frame, policy_state: &PrunePolicyState, screen_area: Rect) {
+pub fn render_policy_modal(
+    f: &mut Frame,
+    t: &Translator,
+    policy_state: &PrunePolicyState,
+    screen_area: Rect,
+) {
     let area = centered_rect(70, 75, screen_area);
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Políticas de Retenção e Limpeza Automática (Borg Prune) ")
+        .title(t.prune_policy_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Yellow));
     let inner_area = block.inner(area);
@@ -40,36 +46,12 @@ pub fn render_policy_modal(f: &mut Frame, policy_state: &PrunePolicyState, scree
     let inact = Style::default().fg(Color::DarkGray);
 
     let fields = [
-        (
-            "1. Manter últimos N backups (--keep-last):",
-            policy_state.last_str.as_str(),
-            0,
-        ),
-        (
-            "2. Manter backups diários (--keep-daily):",
-            policy_state.daily_str.as_str(),
-            1,
-        ),
-        (
-            "3. Manter backups semanais (--keep-weekly):",
-            policy_state.weekly_str.as_str(),
-            2,
-        ),
-        (
-            "4. Manter backups mensais (--keep-monthly):",
-            policy_state.monthly_str.as_str(),
-            3,
-        ),
-        (
-            "5. Manter backups anuais (--keep-yearly):",
-            policy_state.yearly_str.as_str(),
-            4,
-        ),
-        (
-            "6. Filtrar por Prefixo (--prefix, opcional):",
-            policy_state.prefix_str.as_str(),
-            5,
-        ),
+        (t.prune_keep_last(), policy_state.last_str.as_str(), 0),
+        (t.prune_keep_daily(), policy_state.daily_str.as_str(), 1),
+        (t.prune_keep_weekly(), policy_state.weekly_str.as_str(), 2),
+        (t.prune_keep_monthly(), policy_state.monthly_str.as_str(), 3),
+        (t.prune_keep_yearly(), policy_state.yearly_str.as_str(), 4),
+        (t.prune_prefix(), policy_state.prefix_str.as_str(), 5),
     ];
 
     for (title, val, idx) in fields {
@@ -84,17 +66,14 @@ pub fn render_policy_modal(f: &mut Frame, policy_state: &PrunePolicyState, scree
         f.render_widget(p, layout[idx]);
     }
 
-    let hint = Paragraph::new(
-        "💡 Dica: Deixe vazio para desativar a regra. NENHUM dado será apagado na simulação!",
-    )
-    .style(
+    let hint = Paragraph::new(t.prune_hint()).style(
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::ITALIC),
     );
     f.render_widget(hint, layout[6]);
 
-    let prompt = Paragraph::new(" [s / Enter] Simular Retenção (Dry-Run)      [Esc] Cancelar ")
+    let prompt = Paragraph::new(t.prune_prompt_button())
         .alignment(Alignment::Center)
         .style(
             Style::default()
@@ -105,7 +84,12 @@ pub fn render_policy_modal(f: &mut Frame, policy_state: &PrunePolicyState, scree
     f.render_widget(prompt, layout[7]);
 }
 
-pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area: Rect) {
+pub fn render_plan_view(
+    f: &mut Frame,
+    t: &Translator,
+    plan_state: &PrunePlanState,
+    screen_area: Rect,
+) {
     let area = centered_rect(85, 85, screen_area);
     f.render_widget(Clear, area);
 
@@ -113,10 +97,7 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
     let to_prune = plan_state.items.iter().filter(|i| !i.will_keep).count();
 
     let block = Block::default()
-        .title(format!(
-            " Simulação de Limpeza: {} Manter | {} Excluir ",
-            to_keep, to_prune
-        ))
+        .title(t.plan_title_fmt(to_keep, to_prune))
         .borders(Borders::ALL)
         .style(Style::default().fg(if to_prune > 0 {
             Color::Red
@@ -137,18 +118,18 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
 
     let summary = Line::from(vec![
         Span::styled(
-            "Total de backups avaliados: ",
+            t.plan_total_evaluated_label(),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!("{}  |  ", plan_state.items.len())),
         Span::styled(
-            format!("🟢 Mantidos: {}  |  ", to_keep),
+            t.plan_kept_fmt(to_keep),
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("🔴 A Eliminar: {}", to_prune),
+            t.plan_to_prune_fmt(to_prune),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
     ]);
@@ -156,10 +137,10 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
 
     let rows = plan_state.items.iter().map(|item| {
         let (status_text, style) = if item.will_keep {
-            ("[✓ MANTER]", Style::default().fg(Color::Green))
+            (t.badge_keep(), Style::default().fg(Color::Green))
         } else {
             (
-                "[✗ ELIMINAR]",
+                t.badge_prune(),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )
         };
@@ -183,10 +164,10 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
     )
     .header(
         Row::new(vec![
-            Cell::from("Ação").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Nome do Backup").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Data").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Regra Aplicada").style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_action()).style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_name()).style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_date()).style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_applied_rule()).style(Style::default().add_modifier(Modifier::BOLD)),
         ])
         .bottom_margin(1),
     )
@@ -199,7 +180,7 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
     let action_bar = if to_prune > 0 {
         Paragraph::new(vec![Line::from(vec![
             Span::styled(
-                " [y] Confirmar Limpeza e Liberar Espaço com 'compact' ",
+                t.plan_confirm_button(),
                 Style::default()
                     .fg(Color::White)
                     .bg(Color::Red)
@@ -207,13 +188,13 @@ pub fn render_plan_view(f: &mut Frame, plan_state: &PrunePlanState, screen_area:
             ),
             Span::raw("    "),
             Span::styled(
-                " [n / Esc] Cancelar ",
+                t.btn_cancel(),
                 Style::default().fg(Color::White).bg(Color::DarkGray),
             ),
         ])])
         .alignment(Alignment::Center)
     } else {
-        Paragraph::new("Todos os backups atendem à sua política de retenção! Nenhum será apagado. [Esc] Voltar")
+        Paragraph::new(t.plan_none_to_prune())
             .alignment(Alignment::Center)
             .style(Style::default().fg(Color::LightGreen))
     };

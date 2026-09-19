@@ -8,22 +8,23 @@ use ratatui::{
 
 use super::centered_rect;
 use crate::app::App;
+use crate::i18n::Translator;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-pub fn render_confirm_delete(f: &mut Frame, name: &str, screen_area: Rect) {
+pub fn render_confirm_delete(f: &mut Frame, t: &Translator, name: &str, screen_area: Rect) {
     let area = centered_rect(55, 30, screen_area);
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Confirmar Exclusão ")
+        .title(t.confirm_delete_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Red));
 
     let text = vec![
         Line::from(""),
         Line::from(vec![
-            Span::raw("Tem certeza que deseja apagar o backup "),
+            Span::raw(t.confirm_delete_question()),
             Span::styled(
                 name,
                 Style::default()
@@ -33,15 +34,18 @@ pub fn render_confirm_delete(f: &mut Frame, name: &str, screen_area: Rect) {
             Span::raw("?"),
         ]),
         Line::from(""),
-        Line::from("Esta ação é IRREVERSÍVEL. O borg apagará os dados e executará 'borg compact'."),
+        Line::from(t.confirm_delete_warning()),
         Line::from(""),
         Line::from(vec![
             Span::styled(
-                "[y] Sim, Apagar Definitivamente",
+                t.confirm_delete_btn_yes(),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ),
             Span::raw("    "),
-            Span::styled("[n / Esc] Cancelar", Style::default().fg(Color::Green)),
+            Span::styled(
+                t.confirm_delete_btn_cancel(),
+                Style::default().fg(Color::Green),
+            ),
         ]),
     ];
 
@@ -52,12 +56,12 @@ pub fn render_confirm_delete(f: &mut Frame, name: &str, screen_area: Rect) {
     f.render_widget(p, area);
 }
 
-pub fn render_success(f: &mut Frame, msg: &str, screen_area: Rect) {
+pub fn render_success(f: &mut Frame, t: &Translator, msg: &str, screen_area: Rect) {
     let area = centered_rect(60, 35, screen_area);
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Concluído / Sucesso ")
+        .title(t.success_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::LightGreen));
     let p = Paragraph::new(msg)
@@ -68,12 +72,12 @@ pub fn render_success(f: &mut Frame, msg: &str, screen_area: Rect) {
     f.render_widget(p, area);
 }
 
-pub fn render_error(f: &mut Frame, msg: &str, screen_area: Rect) {
+pub fn render_error(f: &mut Frame, t: &Translator, msg: &str, screen_area: Rect) {
     let area = centered_rect(55, 30, screen_area);
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Aviso / Warning ")
+        .title(t.warning_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Red));
     let p = Paragraph::new(msg)
@@ -114,10 +118,7 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
     let gauge = Gauge::default()
         .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
         .percent(pulse_percent)
-        .label(format!(
-            "Atividade Borg: {}s",
-            app.loading_info.elapsed_secs
-        ));
+        .label(app.t.gauge_activity_fmt(app.loading_info.elapsed_secs));
     f.render_widget(gauge, layout[1]);
 
     let elapsed = app.loading_info.elapsed_secs;
@@ -126,14 +127,14 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
     let details = vec![
         Line::from(vec![
             Span::styled(
-                "⏱️  Tempo decorrido: ",
+                app.t.telemetry_elapsed(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(elapsed_formatted, Style::default().fg(Color::Yellow)),
         ]),
         Line::from(vec![
             Span::styled(
-                "📦  Arquivos processados: ",
+                app.t.telemetry_files_count(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -143,7 +144,7 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
         ]),
         Line::from(vec![
             Span::styled(
-                "📊  Tamanho Original: ",
+                app.t.telemetry_original_size(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -151,7 +152,7 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
                 Style::default().fg(Color::White),
             ),
             Span::styled(
-                "  |  Comprimido: ",
+                app.t.telemetry_compressed_size(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -159,7 +160,7 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
                 Style::default().fg(Color::LightCyan),
             ),
             Span::styled(
-                "  |  Deduplicado: ",
+                app.t.telemetry_deduplicated_size(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
@@ -170,12 +171,12 @@ pub fn render_loading(f: &mut Frame, app: &App, screen_area: Rect) {
         Line::from(""),
         Line::from(vec![
             Span::styled(
-                "📄  Arquivo atual: ",
+                app.t.telemetry_current_file(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 if app.loading_info.current_file.is_empty() {
-                    "Processando dados...".to_string()
+                    app.t.telemetry_processing().to_string()
                 } else {
                     app.loading_info.current_file.clone()
                 },

@@ -175,25 +175,19 @@ impl App {
 
         if name.is_empty() {
             self.state =
-                AppState::ErrorPopup("Erro: O Nome do backup não pode ser vazio!".to_string());
+                AppState::ErrorPopup(self.t.err_name_empty().to_string());
             return;
         }
 
         if name.contains('/') || name.contains(':') {
-            self.state = AppState::ErrorPopup(
-                "Erro: O Nome do backup não pode conter '/' ou ':' (caracteres reservados)!"
-                    .to_string(),
-            );
+            self.state = AppState::ErrorPopup(self.t.err_name_invalid().to_string());
             return;
         }
 
         let (includes, excludes) = self.file_browser.get_final_paths();
 
         if includes.is_empty() {
-            self.state = AppState::ErrorPopup(
-                "Erro: Você precisa selecionar ao menos 1 pasta/arquivo principal com [+] (Aperte Espaço)!"
-                    .to_string(),
-            );
+            self.state = AppState::ErrorPopup(self.t.err_no_files().to_string());
             return;
         }
 
@@ -203,7 +197,7 @@ impl App {
         };
 
         self.loading_info = LoadingInfo {
-            message: format!("Criando arquivo '{}'...", name),
+            message: self.t.loading_creating_fmt(&name),
             elapsed_secs: 0,
             original_size: "0 B".to_string(),
             compressed_size: "0 B".to_string(),
@@ -257,10 +251,7 @@ impl App {
         };
 
         self.loading_info = LoadingInfo {
-            message: format!(
-                "Excluindo backup '{}' e compactando repositório...",
-                archive_name
-            ),
+            message: self.t.loading_deleting_fmt(&archive_name),
             elapsed_secs: 0,
             original_size: "0 B".to_string(),
             compressed_size: "0 B".to_string(),
@@ -297,8 +288,13 @@ impl App {
                     None => (config::get_default_repo_path(), None),
                 };
 
+                if repo_path.contains(':') && !repo_path.starts_with('/') {
+                    self.state = AppState::ErrorPopup(self.t.err_fuse_unsupported().to_string());
+                    return;
+                }
+
                 self.loading_info = LoadingInfo {
-                    message: format!("Lendo arquivos do backup '{}'...", name),
+                    message: self.t.loading_inspecting_fmt(&name),
                     elapsed_secs: 0,
                     original_size: "0 B".to_string(),
                     compressed_size: "0 B".to_string(),
@@ -354,7 +350,7 @@ impl App {
 
             if req.destination_path.trim().is_empty() {
                 self.state =
-                    AppState::ErrorPopup("Diretório de destino não pode ser vazio!".to_string());
+                    AppState::ErrorPopup(self.t.err_repo_loc_empty().to_string());
                 return;
             }
 
@@ -365,9 +361,9 @@ impl App {
 
             let is_granular = !paths.is_empty();
             let msg = if is_granular {
-                format!("Extraindo item '{}' de '{}'...", paths[0], archive_name)
+                format!("{}: {}", self.t.loading_restoring_fmt(&archive_name), paths[0])
             } else {
-                format!("Restaurando backup completo '{}'...", archive_name)
+                self.t.loading_restoring_fmt(&archive_name)
             };
 
             self.loading_info = LoadingInfo {
@@ -442,6 +438,11 @@ impl App {
                     None => (config::get_default_repo_path(), None),
                 };
 
+                if repo_path.contains(':') && !repo_path.starts_with('/') {
+                    self.state = AppState::ErrorPopup(self.t.err_fuse_unsupported().to_string());
+                    return;
+                }
+
                 match self.borg_manager.mount_archive(
                     &repo_path,
                     &name,
@@ -451,11 +452,7 @@ impl App {
                     Ok(_) => {
                         self.mounted_archives
                             .insert(name.clone(), mount_point.clone());
-                        self.state = AppState::SuccessPopup(format!(
-                            "Backup '{}' montado com sucesso em:\n{}\n\nVocê pode abrir a pasta no seu navegador de arquivos!\nQuando terminar, aperte [u] para desmontar.",
-                            name,
-                            mount_point.display()
-                        ));
+                        self.state = AppState::SuccessPopup(self.t.msg_mount_success_fmt(&name, &mount_point.display().to_string()));
                     }
                     Err(e) => {
                         self.state =
@@ -473,11 +470,7 @@ impl App {
                 if let Some(mount_point) = self.mounted_archives.remove(&name) {
                     match self.borg_manager.umount_archive(&mount_point) {
                         Ok(_) => {
-                            self.state = AppState::SuccessPopup(format!(
-                                "Backup '{}' foi desmontado com sucesso de:\n{}",
-                                name,
-                                mount_point.display()
-                            ));
+                            self.state = AppState::SuccessPopup(self.t.msg_umount_success().to_string());
                         }
                         Err(e) => {
                             self.mounted_archives.insert(name, mount_point);
@@ -485,10 +478,7 @@ impl App {
                         }
                     }
                 } else {
-                    self.state = AppState::ErrorPopup(format!(
-                        "O backup '{}' não está montado atualmente.",
-                        name
-                    ));
+                    self.state = AppState::ErrorPopup(self.t.err_not_mounted_fmt(&name));
                 }
             }
     }
@@ -522,7 +512,7 @@ impl App {
             };
 
             self.loading_info = LoadingInfo {
-                message: "Calculando retenção e simulando prune (Dry-Run)...".to_string(),
+                message: self.t.loading_pruning_sim().to_string(),
                 elapsed_secs: 0,
                 original_size: "-".to_string(),
                 compressed_size: "-".to_string(),
@@ -558,7 +548,7 @@ impl App {
             let to_prune_count = plan_state.items.iter().filter(|i| !i.will_keep).count();
 
             self.loading_info = LoadingInfo {
-                message: "Aplicando retenção definitiva e compactando repositório...".to_string(),
+                message: self.t.loading_pruning_exec().to_string(),
                 elapsed_secs: 0,
                 original_size: "-".to_string(),
                 compressed_size: "-".to_string(),
@@ -601,7 +591,7 @@ impl App {
         let pass = self.new_repo_passphrase.trim().to_string();
 
         if name.is_empty() || location.is_empty() {
-            self.state = AppState::ErrorPopup("Nome e Localização são obrigatórios!".to_string());
+            self.state = AppState::ErrorPopup(self.t.err_repo_name_empty().to_string());
             return;
         }
 
@@ -619,6 +609,7 @@ impl App {
             prune_policy: Some(PrunePolicy::default()),
         };
 
+        let repo_name = new_repo.name.clone();
         self.config.repositories.push(new_repo.clone());
         self.config.active_repo_id = new_repo.id;
         let _ = config::save_config(&self.config);
@@ -628,6 +619,7 @@ impl App {
         self.new_repo_passphrase.clear();
 
         self.load_repository();
+        self.state = AppState::SuccessPopup(self.t.msg_repo_added_fmt(&repo_name));
     }
 
     pub fn handle_background_tasks(&mut self) {
@@ -660,11 +652,15 @@ impl App {
                 }
                 ThreadStatus::DoneCreate => {
                     self.load_repository();
-                    self.new_backup_name.clear();
+                    let created_name = std::mem::take(&mut self.new_backup_name);
                     self.file_browser.explicit_includes.clear();
                     self.file_browser.explicit_excludes.clear();
                     self.loading_start = None;
-                    self.state = AppState::Browsing;
+                    self.state = if !created_name.is_empty() {
+                        AppState::SuccessPopup(self.t.msg_backup_success_fmt(&created_name))
+                    } else {
+                        AppState::Browsing
+                    };
                 }
                 ThreadStatus::DoneDelete => {
                     self.load_repository();
@@ -673,10 +669,7 @@ impl App {
                 }
                 ThreadStatus::DoneRestore(target) => {
                     self.loading_start = None;
-                    self.state = AppState::SuccessPopup(format!(
-                        "Restauração concluída com sucesso!\n\nArquivos salvos em:\n{}",
-                        target
-                    ));
+                    self.state = AppState::SuccessPopup(self.t.msg_restore_success_fmt(&target));
                 }
                 ThreadStatus::DoneInspect(res, name) => {
                     self.loading_start = None;
@@ -713,10 +706,9 @@ impl App {
                     match res {
                         Ok(pruned_count) => {
                             self.load_repository();
-                            self.state = AppState::SuccessPopup(format!(
-                                "Limpeza de retenção concluída com sucesso!\n\n{} backups foram eliminados e o espaço em disco foi liberado via 'borg compact'.",
-                                pruned_count
-                            ));
+                            self.state = AppState::SuccessPopup(
+                                self.t.msg_prune_success_fmt(pruned_count)
+                            );
                         }
                         Err(e) => {
                             self.state = AppState::ErrorPopup(e);
@@ -788,7 +780,7 @@ mod tests {
 
         match app.state {
             AppState::ErrorPopup(msg) => {
-                assert!(msg.contains("não pode ser vazio"));
+                assert!(msg.contains("não pode ser vazio") || msg.contains("cannot be empty"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter nome vazio"),
         }
@@ -805,7 +797,7 @@ mod tests {
 
         match app.state {
             AppState::ErrorPopup(msg) => {
-                assert!(msg.contains("caracteres reservados"));
+                assert!(msg.contains("caracteres reservados") || msg.contains("reserved characters"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter nome com caracteres reservados"),
         }
@@ -820,7 +812,7 @@ mod tests {
 
         match app.state {
             AppState::ErrorPopup(msg) => {
-                assert!(msg.contains("precisa selecionar"));
+                assert!(msg.contains("precisa selecionar") || msg.contains("must select"));
             }
             _ => panic!("Esperava ErrorPopup ao submeter sem arquivos selecionados"),
         }
@@ -884,7 +876,7 @@ mod tests {
         app.umount_selected_archive();
         match app.state {
             AppState::ErrorPopup(msg) => {
-                assert!(msg.contains("não está montado"));
+                assert!(msg.contains("não está montado") || msg.contains("not mounted"));
             }
             _ => panic!("Esperava ErrorPopup avisando que não está montado"),
         }

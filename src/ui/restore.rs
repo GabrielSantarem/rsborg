@@ -8,13 +8,14 @@ use ratatui::{
 
 use super::centered_rect;
 use crate::app::RestoreRequest;
+use crate::i18n::Translator;
 
-pub fn render(f: &mut Frame, req: &RestoreRequest, screen_area: Rect) {
+pub fn render(f: &mut Frame, t: &Translator, req: &RestoreRequest, screen_area: Rect) {
     let area = centered_rect(65, 45, screen_area);
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Assistente de Restauração / Extract ")
+        .title(t.restore_wizard_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Green));
     let inner_area = block.inner(area);
@@ -31,19 +32,16 @@ pub fn render(f: &mut Frame, req: &RestoreRequest, screen_area: Rect) {
         .split(inner_area);
 
     let what_text = if req.paths_to_extract.is_empty() {
-        "Restauração Total (Todos os arquivos do backup)".to_string()
+        t.restore_all_files().to_string()
     } else {
-        format!("Item específico: {}", req.paths_to_extract[0])
+        t.restore_specific_item_fmt(&req.paths_to_extract[0])
     };
 
-    let origin_p = Paragraph::new(format!(
-        "Origem: {}\nConteúdo: {}",
-        req.archive_name, what_text
-    ))
-    .block(
+    let origin_content = t.restore_origin_content_fmt(&req.archive_name, &what_text);
+    let origin_p = Paragraph::new(origin_content).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("Backup Selecionado"),
+            .title(t.restore_selected_backup_title()),
     );
     f.render_widget(origin_p, layout[0]);
 
@@ -56,7 +54,7 @@ pub fn render(f: &mut Frame, req: &RestoreRequest, screen_area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Diretório de Destino (digite para alterar)"),
+                .title(t.restore_destination_dir_title()),
         );
     f.render_widget(dest_p, layout[1]);
 
@@ -64,7 +62,7 @@ pub fn render(f: &mut Frame, req: &RestoreRequest, screen_area: Rect) {
         Line::from(""),
         Line::from(vec![
             Span::styled(
-                " [Enter] Iniciar Extração ",
+                t.btn_start_extraction(),
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Green)
@@ -72,7 +70,7 @@ pub fn render(f: &mut Frame, req: &RestoreRequest, screen_area: Rect) {
             ),
             Span::raw("   "),
             Span::styled(
-                " [Esc] Cancelar ",
+                t.btn_cancel(),
                 Style::default().fg(Color::White).bg(Color::DarkGray),
             ),
         ]),

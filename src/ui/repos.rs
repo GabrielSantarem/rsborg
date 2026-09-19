@@ -13,7 +13,7 @@ pub fn render_manage_repos(f: &mut Frame, app: &App, screen_area: Rect) {
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Gerenciador de Repositórios ")
+        .title(app.t.repos_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Cyan));
     let inner_area = block.inner(area);
@@ -28,11 +28,15 @@ pub fn render_manage_repos(f: &mut Frame, app: &App, screen_area: Rect) {
             let is_selected = i == app.repo_list_index;
             let is_active = repo.id == app.config.active_repo_id;
 
-            let active_badge = if is_active { " [ATIVO] " } else { "         " };
-            let enc_text = if repo.passphrase.is_some() {
-                "🔒 Criptografado"
+            let active_badge = if is_active {
+                app.t.badge_active()
             } else {
-                "🔓 Sem senha"
+                "         "
+            };
+            let enc_text = if repo.passphrase.is_some() {
+                app.t.encrypted_label()
+            } else {
+                app.t.unencrypted_label()
             };
 
             let mut style = Style::default();
@@ -54,7 +58,7 @@ pub fn render_manage_repos(f: &mut Frame, app: &App, screen_area: Rect) {
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(" Repositórios Cadastrados "),
+            .title(app.t.repos_list_title()),
     );
     f.render_widget(list, inner_area);
 }
@@ -64,7 +68,7 @@ pub fn render_add_repo(f: &mut Frame, app: &App, screen_area: Rect) {
     f.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Adicionar Novo Repositório ")
+        .title(app.t.add_repo_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Yellow));
     let inner_area = block.inner(area);
@@ -90,7 +94,7 @@ pub fn render_add_repo(f: &mut Frame, app: &App, screen_area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("1. Nome Identificador (ex: HD Externo, Servidor Remoto)"),
+                .title(app.t.field_repo_name_title()),
         );
     f.render_widget(name_p, layout[0]);
 
@@ -99,7 +103,7 @@ pub fn render_add_repo(f: &mut Frame, app: &App, screen_area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("2. Localização (ex: /run/media/... ou ssh://user@host/repo)"),
+                .title(app.t.field_repo_loc_title()),
         );
     f.render_widget(loc_p, layout[1]);
 
@@ -109,7 +113,7 @@ pub fn render_add_repo(f: &mut Frame, app: &App, screen_area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("3. Senha / Passphrase (Opcional - deixe vazio se não tiver)"),
+                .title(app.t.field_repo_pass_title()),
         );
     f.render_widget(pass_p, layout[2]);
 }

@@ -7,16 +7,13 @@ use ratatui::{
 
 use super::centered_rect;
 use crate::app::InspectState;
+use crate::i18n::Translator;
 
-pub fn render(f: &mut Frame, inspect: &InspectState, screen_area: Rect) {
+pub fn render(f: &mut Frame, t: &Translator, inspect: &InspectState, screen_area: Rect) {
     let area = centered_rect(85, 85, screen_area);
     f.render_widget(Clear, area);
 
-    let title = format!(
-        " Conteúdo do Backup: {} ({} itens) - [x] Restaurar Item Selecionado ",
-        inspect.archive_name,
-        inspect.entries.len()
-    );
+    let title = t.inspect_title_fmt(&inspect.archive_name, inspect.entries.len());
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
@@ -48,9 +45,9 @@ pub fn render(f: &mut Frame, inspect: &InspectState, screen_area: Rect) {
     )
     .header(
         Row::new(vec![
-            Cell::from("Permissões").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Tamanho").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Caminho do Arquivo").style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_permissions()).style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_size()).style(Style::default().add_modifier(Modifier::BOLD)),
+            Cell::from(t.col_path()).style(Style::default().add_modifier(Modifier::BOLD)),
         ])
         .bottom_margin(1),
     )

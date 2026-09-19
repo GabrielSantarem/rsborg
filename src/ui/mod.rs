@@ -32,11 +32,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let version_str = app
         .borg_version
         .as_deref()
-        .unwrap_or("Borg: Verificando...");
+        .unwrap_or_else(|| app.t.checking_borg());
 
     let (active_repo_name, active_repo_loc) = match app.get_active_repo() {
         Some(r) => (r.name.as_str(), r.location.as_str()),
-        None => ("Padrão Local", "Desconhecido"),
+        None => (app.t.default_local(), app.t.unknown()),
     };
 
     let header_text = vec![Line::from(vec![
@@ -79,29 +79,17 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // 3. Footer
     let footer_text = match app.state {
         AppState::Browsing => app.t.footer_main(),
-        AppState::CreatingBackup => {
-            " [Tab] Alternar Foco | [Espaço] Incluir/Excluir | [Enter/→] Entrar | [BS/←] Subir | [s / Ctrl+S] Criar | [Esc] Cancelar "
-        }
-        AppState::ConfirmDelete(_) => " [y / Enter] Confirmar Exclusão | [n / Esc] Cancelar ",
-        AppState::ConfirmRestore(_) => {
-            " [Enter] Iniciar Restauração | [Backspace] Editar Destino | [Esc] Cancelar "
-        }
-        AppState::InspectArchive(_) => {
-            " [x] Restaurar Item Selecionado | [j/k/Setas] Rolar | [Esc / Enter] Voltar "
-        }
-        AppState::PruningPolicy(_) => {
-            " [Tab/Setas] Campo | [Enter/s] Simular (Dry-Run) | [Esc] Cancelar "
-        }
-        AppState::PrunePlanView(_) => {
-            " [y] Confirmar Limpeza Definitiva | [j/k] Rolar | [n / Esc] Cancelar "
-        }
-        AppState::ManagingRepos => " [Enter] Ativar | [a] Adicionar | [d] Remover | [Esc] Voltar ",
-        AppState::AddingRepo => {
-            " [Tab] Alternar Campo | [Enter] Salvar Repositório | [Esc] Cancelar "
-        }
-        AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => " [Esc / Enter] Fechar ",
-        AppState::Loading => " Executando tarefa do Borg em segundo plano... ",
-        _ => " [Esc] Sair ",
+        AppState::CreatingBackup => app.t.footer_creating(),
+        AppState::ConfirmDelete(_) => app.t.footer_confirm_delete(),
+        AppState::ConfirmRestore(_) => app.t.footer_confirm_restore(),
+        AppState::InspectArchive(_) => app.t.footer_inspect(),
+        AppState::PruningPolicy(_) => app.t.footer_pruning_policy(),
+        AppState::PrunePlanView(_) => app.t.footer_prune_plan(),
+        AppState::ManagingRepos => app.t.footer_managing_repos(),
+        AppState::AddingRepo => app.t.footer_adding_repo(),
+        AppState::ErrorPopup(_) | AppState::SuccessPopup(_) => app.t.footer_popup(),
+        AppState::Loading => app.t.footer_loading(),
+        _ => " [Esc] ",
     };
     let footer = Paragraph::new(footer_text).block(Block::default().borders(Borders::ALL));
     f.render_widget(footer, chunks[2]);
@@ -112,23 +100,23 @@ pub fn render(f: &mut Frame, app: &mut App) {
     }
 
     if let AppState::ConfirmDelete(ref name) = app.state {
-        popups::render_confirm_delete(f, name, size);
+        popups::render_confirm_delete(f, &app.t, name, size);
     }
 
     if let AppState::ConfirmRestore(ref req) = app.state {
-        restore::render(f, req, size);
+        restore::render(f, &app.t, req, size);
     }
 
     if let AppState::InspectArchive(ref inspect) = app.state {
-        inspect::render(f, inspect, size);
+        inspect::render(f, &app.t, inspect, size);
     }
 
     if let AppState::PruningPolicy(ref policy_state) = app.state {
-        prune::render_policy_modal(f, policy_state, size);
+        prune::render_policy_modal(f, &app.t, policy_state, size);
     }
 
     if let AppState::PrunePlanView(ref plan_state) = app.state {
-        prune::render_plan_view(f, plan_state, size);
+        prune::render_plan_view(f, &app.t, plan_state, size);
     }
 
     if app.state == AppState::ManagingRepos {
@@ -140,11 +128,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
     }
 
     if let AppState::SuccessPopup(ref msg) = app.state {
-        popups::render_success(f, msg, size);
+        popups::render_success(f, &app.t, msg, size);
     }
 
     if let AppState::ErrorPopup(ref msg) = app.state {
-        popups::render_error(f, msg, size);
+        popups::render_error(f, &app.t, msg, size);
     }
 
     if app.state == AppState::Loading {
