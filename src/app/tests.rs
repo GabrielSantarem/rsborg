@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::app::App;
-use crate::app::state::{AppState, ProfileFocus, PrunePolicyState};
+use crate::app::state::{AppState, ProfileFocus, PrunePolicyState, ThreadStatus};
 use crate::borg::{BackupArchive, BorgCheckMode};
 use crate::config::PrunePolicy;
 
@@ -274,4 +274,28 @@ fn test_help_modal_navigation() {
     };
     crate::events::handle_key_event(&mut app, key_esc);
     assert_eq!(app.state, AppState::Browsing);
+}
+
+#[test]
+fn test_break_lock_active_repo() {
+    let mut app = App::new();
+    app.override_repo_path("/caminho/para/meu/repo");
+    app.break_lock_active_repo();
+    assert!(matches!(app.state, AppState::SuccessPopup(_)));
+}
+
+#[test]
+fn test_handle_done_delete_shows_success_popup() {
+    let mut app = App::new();
+    app.override_repo_path("/caminho/para/meu/repo");
+    let tx = app.tx.clone();
+    let _ = tx.send(ThreadStatus::DoneDelete("backup_xyz".to_string()));
+    app.handle_background_tasks();
+    match app.state {
+        AppState::SuccessPopup(ref msg) => {
+            assert!(msg.contains("backup_xyz"));
+            assert!(msg.contains("excluído com sucesso") || msg.contains("deleted successfully"));
+        }
+        _ => panic!("Esperava SuccessPopup após DoneDelete"),
+    }
 }

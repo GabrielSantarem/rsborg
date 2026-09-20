@@ -11,6 +11,7 @@ mod checker;
 mod config;
 mod events;
 mod i18n;
+pub mod logger;
 mod ui;
 
 use app::App;
@@ -91,6 +92,7 @@ fn setup_panic_hook() {
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         ratatui::restore();
+        log_error!("FATAL PANIC: {:?}", panic_info);
         eprintln!("\n\x1b[31;1m[RsBorg Fatal Error]\x1b[0m Ocorreu um erro inesperado no aplicativo:");
         original_hook(panic_info);
         eprintln!("\x1b[33mO terminal foi restaurado com segurança para o modo padrão.\x1b[0m\n");
@@ -105,6 +107,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     setup_panic_hook();
+    logger::init_logger();
+    log_info!("Application starting up with CLI arguments: repo={:?}, lang={:?}", cli.repo_path, cli.lang);
 
     let mut terminal = ratatui::init();
 
@@ -121,8 +125,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     ratatui::restore();
 
-    if let Err(err) = res {
+    if let Err(ref err) = res {
+        log_error!("Interface execution error: {err:?}");
         eprintln!("Erro na execução da interface: {err:?}");
+    } else {
+        log_info!("Application exited cleanly.");
     }
 
     Ok(())

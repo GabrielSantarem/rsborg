@@ -252,6 +252,8 @@ impl Translator {
         help_prof_manage => (pt: "Gerenciar Perfis de Backup e Gerador Systemd/Cron", en: "Manage Backup Profiles and Systemd/Cron Generator"),
         help_prof_repos => (pt: "Alternar entre Repositórios configurados ou adicionar novo", en: "Switch configured Repositories or add new one"),
         help_close_hint => (pt: "  [ Pressione Esc, q ou ? para fechar este menu de ajuda ]", en: "  [ Press Esc, q or ? to close this help menu ]"),
+        btn_break_lock => (pt: "Destravar Repositório (break-lock)", en: "Break Repository Lock (break-lock)"),
+        msg_break_lock_success => (pt: "Trava do repositório liberada com sucesso (break-lock)!", en: "Repository lock released successfully (break-lock)!"),
     }
 
     // --- Métodos Dinâmicos com Formatação (Parâmetros) ---
@@ -537,6 +539,13 @@ impl Translator {
         match self.lang {
             Language::Pt => format!("Erro ao salvar arquivo .timer: {}", err),
             Language::En => format!("Error saving .timer file: {}", err),
+        }
+    }
+
+    pub fn msg_delete_success_fmt(&self, name: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Snapshot '{}' excluído com sucesso!", name),
+            Language::En => format!("Snapshot '{}' deleted successfully!", name),
         }
     }
 

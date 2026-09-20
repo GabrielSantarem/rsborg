@@ -29,7 +29,7 @@ impl App {
             compressed_size: "0 B".to_string(),
             deduplicated_size: "0 B".to_string(),
             files_count: "0".to_string(),
-            current_file: "Executando borg delete + compact...".to_string(),
+            current_file: "Executando borg delete...".to_string(),
             raw_line: String::new(),
             spinner_frame: 0,
         };
@@ -38,13 +38,18 @@ impl App {
 
         let tx = self.tx.clone();
         let manager = BorgManager::new();
+        let deleted_name = archive_name.clone();
+
+        crate::log_info!("Initiating delete for archive '{}' in repo '{}'", archive_name, repo_path);
 
         thread::spawn(move || {
             match manager.delete_archive(&repo_path, &archive_name, passphrase.as_deref()) {
                 Ok(_) => {
-                    let _ = tx.send(ThreadStatus::DoneDelete);
+                    crate::log_info!("Archive '{}' successfully deleted", deleted_name);
+                    let _ = tx.send(ThreadStatus::DoneDelete(deleted_name));
                 }
                 Err(e) => {
+                    crate::log_error!("Failed to delete archive '{}': {}", archive_name, e);
                     let _ = tx.send(ThreadStatus::Error(e));
                 }
             }

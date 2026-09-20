@@ -166,7 +166,7 @@ pub enum CreateFocus {
 pub enum ThreadStatus {
     Progress(BackupProgress),
     DoneCreate,
-    DoneDelete,
+    DoneDelete(String),
     DoneRestore(String),
     DoneInspect(Result<Vec<ArchiveFileEntry>, String>, String),
     DonePruneDryRun(Result<Vec<PruneArchiveItem>, String>, PrunePolicy),

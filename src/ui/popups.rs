@@ -73,18 +73,41 @@ pub fn render_success(f: &mut Frame, t: &Translator, msg: &str, screen_area: Rec
 }
 
 pub fn render_error(f: &mut Frame, t: &Translator, msg: &str, screen_area: Rect) {
-    let area = centered_rect(55, 30, screen_area);
+    let area = centered_rect(65, 40, screen_area);
     f.render_widget(Clear, area);
+
+    let is_lock = msg.contains("break-lock") || msg.contains("bloqueado") || msg.contains("locked");
 
     let block = Block::default()
         .title(t.warning_title())
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Red));
-    let p = Paragraph::new(msg)
+
+    let mut lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(msg, Style::default().fg(Color::Red))),
+        Line::from(""),
+    ];
+
+    if is_lock {
+        lines.push(Line::from(vec![
+            Span::styled(" [b] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(t.btn_break_lock(), Style::default().fg(Color::White)),
+            Span::raw("    "),
+            Span::styled(" [Esc] ", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            Span::styled(t.confirm_delete_btn_cancel(), Style::default().fg(Color::Gray)),
+        ]));
+    } else {
+        lines.push(Line::from(vec![
+            Span::styled(" [Esc / Enter] ", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            Span::styled(t.confirm_delete_btn_cancel(), Style::default().fg(Color::Gray)),
+        ]));
+    }
+
+    let p = Paragraph::new(lines)
         .wrap(Wrap { trim: true })
         .alignment(Alignment::Center)
-        .block(block)
-        .style(Style::default().fg(Color::Red));
+        .block(block);
     f.render_widget(p, area);
 }
 

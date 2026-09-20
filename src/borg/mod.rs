@@ -42,6 +42,38 @@ impl BorgManager {
         cmd
     }
 
+    fn execute_command(&self, mut cmd: Command, desc: &str) -> Result<std::process::Output, String> {
+        let start = std::time::Instant::now();
+        crate::log_info!("[borg] Executing command: {:?}", cmd);
+
+        let output = cmd.output().map_err(|e| {
+            let err_msg = format!("Falha ao executar {}: {}", desc, e);
+            crate::log_error!("[borg] IO error during '{}': {}", desc, e);
+            BorgError::IoError(err_msg).to_string()
+        })?;
+
+        let duration = start.elapsed();
+        let code = output.status.code();
+        let success = output.status.success();
+
+        if success {
+            crate::log_info!("[borg] Finished '{}' successfully in {:?}", desc, duration);
+            Ok(output)
+        } else {
+            let stderr_str = String::from_utf8_lossy(&output.stderr);
+            crate::log_error!(
+                "[borg] Command '{}' failed (code: {:?}, elapsed: {:?}):
+{}",
+                desc,
+                code,
+                duration,
+                stderr_str.trim()
+            );
+            let err = BorgError::from_stderr(code, &stderr_str);
+            Err(err.to_string())
+        }
+    }
+
     pub fn verify_installation(&self) -> Result<String, String> {
         match Command::new(&self.bin_path).arg("-V").output() {
             Ok(o) => {
@@ -70,17 +102,9 @@ impl BorgManager {
             "none"
         };
 
-        let mut cmd = self.prepare_command(&["init", "-e", enc_mode, repo_path], passphrase);
-        let o = cmd
-            .output()
-            .map_err(|e| BorgError::IoError(e.to_string()).to_string())?;
-
-        if o.status.success() {
-            Ok(())
-        } else {
-            let err = BorgError::from_stderr(o.status.code(), &String::from_utf8_lossy(&o.stderr));
-            Err(err.to_string())
-        }
+        let cmd = self.prepare_command(&["init", "-e", enc_mode, repo_path], passphrase);
+        self.execute_command(cmd, &format!("init repository at '{}'", repo_path))?;
+        Ok(())
     }
 
     pub fn list_archives(
@@ -112,18 +136,8 @@ impl BorgManager {
             return Ok(list);
         }
 
-        let mut cmd = self.prepare_command(&["list", "--json", repo_path], passphrase);
-        let output = cmd
-            .output()
-            .map_err(|e| BorgError::IoError(e.to_string()).to_string())?;
-
-        if !output.status.success() {
-            let err = BorgError::from_stderr(
-                output.status.code(),
-                &String::from_utf8_lossy(&output.stderr),
-            );
-            return Err(err.to_string());
-        }
+        let cmd = self.prepare_command(&["list", "--json", repo_path], passphrase);
+        let output = self.execute_command(cmd, &format!("list archives for '{}'", repo_path))?;
 
         let json_str = String::from_utf8_lossy(&output.stdout);
         let list: BorgArchiveList = serde_json::from_str(&json_str)
@@ -195,7 +209,9 @@ impl BorgManager {
         let mut cmd = self.prepare_command(&arg_slices, passphrase);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
+        crate::log_info!("[borg] Executing create: {:?}", cmd);
         let mut child = cmd.spawn().map_err(|e| {
+            crate::log_error!("[borg] Failed to spawn borg create: {}", e);
             BorgError::IoError(format!("Falha ao iniciar borg create: {}", e)).to_string()
         })?;
 
@@ -232,10 +248,12 @@ impl BorgManager {
         })?;
 
         if !status.success() {
+            crate::log_error!("[borg] borg create failed (code: {:?}):\n{}", status.code(), all_stderr.trim());
             let err = BorgError::from_stderr(status.code(), &all_stderr);
             return Err(format!("Erro ao criar backup:\n{}", err));
         }
 
+        crate::log_info!("[borg] borg create '{}' finished successfully.", archive_name);
         Ok(())
     }
 
@@ -245,24 +263,44 @@ impl BorgManager {
         archive_name: &str,
         passphrase: Option<&str>,
     ) -> Result<(), String> {
-        let target = format!("{}::{}", repo_path, archive_name);
-
-        let mut cmd = self.prepare_command(&["delete", &target], passphrase);
-        let output = cmd.output().map_err(|e| {
-            BorgError::IoError(format!("Falha ao executar borg delete: {}", e)).to_string()
-        })?;
-
-        if !output.status.success() {
-            let err = BorgError::from_stderr(
-                output.status.code(),
-                &String::from_utf8_lossy(&output.stderr),
-            );
-            return Err(err.to_string());
+        if repo_path == "/caminho/para/meu/repo" {
+            crate::log_info!("[borg] Mock delete archive: {}", archive_name);
+            return Ok(());
         }
 
-        let mut compact_cmd = self.prepare_command(&["compact", repo_path], passphrase);
-        let _ = compact_cmd.output();
+        let target = format!("{}::{}", repo_path, archive_name);
+        let cmd = self.prepare_command(&["delete", &target], passphrase);
+        self.execute_command(cmd, &format!("delete archive '{}'", archive_name))?;
+        Ok(())
+    }
 
+    pub fn compact_repository(
+        &self,
+        repo_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<(), String> {
+        if repo_path == "/caminho/para/meu/repo" {
+            crate::log_info!("[borg] Mock compact repository: {}", repo_path);
+            return Ok(());
+        }
+
+        let cmd = self.prepare_command(&["compact", repo_path], passphrase);
+        self.execute_command(cmd, &format!("compact repository '{}'", repo_path))?;
+        Ok(())
+    }
+
+    pub fn break_lock(
+        &self,
+        repo_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<(), String> {
+        if repo_path == "/caminho/para/meu/repo" {
+            crate::log_info!("[borg] Mock break-lock repository: {}", repo_path);
+            return Ok(());
+        }
+
+        let cmd = self.prepare_command(&["break-lock", repo_path], passphrase);
+        self.execute_command(cmd, &format!("break-lock on '{}'", repo_path))?;
         Ok(())
     }
 
@@ -274,18 +312,8 @@ impl BorgManager {
     ) -> Result<Vec<ArchiveFileEntry>, String> {
         let target = format!("{}::{}", repo_path, archive_name);
 
-        let mut cmd = self.prepare_command(&["list", "--json-lines", &target], passphrase);
-        let output = cmd.output().map_err(|e| {
-            BorgError::IoError(format!("Falha ao listar conteúdo do backup: {}", e)).to_string()
-        })?;
-
-        if !output.status.success() {
-            let err = BorgError::from_stderr(
-                output.status.code(),
-                &String::from_utf8_lossy(&output.stderr),
-            );
-            return Err(err.to_string());
-        }
+        let cmd = self.prepare_command(&["list", "--json-lines", &target], passphrase);
+        let output = self.execute_command(cmd, &format!("list contents for '{}'", target))?;
 
         let stdout_str = String::from_utf8_lossy(&output.stdout);
         let mut entries = Vec::new();
@@ -337,7 +365,9 @@ impl BorgManager {
         cmd.current_dir(target_dir);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
+        crate::log_info!("[borg] Executing extract: {:?}", cmd);
         let mut child = cmd.spawn().map_err(|e| {
+            crate::log_error!("[borg] Failed to spawn borg extract: {}", e);
             BorgError::IoError(format!("Falha ao iniciar borg extract: {}", e)).to_string()
         })?;
 
@@ -358,10 +388,12 @@ impl BorgManager {
             if let Some(mut stderr) = child.stderr.take() {
                 let _ = stderr.read_to_string(&mut err_msg);
             }
+            crate::log_error!("[borg] borg extract failed (code: {:?}):\n{}", status.code(), err_msg.trim());
             let err = BorgError::from_stderr(status.code(), &err_msg);
             return Err(format!("Erro ao extrair arquivos:\n{}", err));
         }
 
+        crate::log_info!("[borg] borg extract finished successfully.");
         Ok(())
     }
 
@@ -384,37 +416,15 @@ impl BorgManager {
 
         let target = format!("{}::{}", repo_path, archive_name);
         let mount_str = mount_point.to_string_lossy().to_string();
-        let mut cmd = self.prepare_command(&["mount", &target, &mount_str], passphrase);
-        let output = cmd.output().map_err(|e| {
-            BorgError::IoError(format!("Falha ao executar borg mount: {}", e)).to_string()
-        })?;
-
-        if !output.status.success() {
-            let err = BorgError::from_stderr(
-                output.status.code(),
-                &String::from_utf8_lossy(&output.stderr),
-            );
-            return Err(err.to_string());
-        }
-
+        let cmd = self.prepare_command(&["mount", &target, &mount_str], passphrase);
+        self.execute_command(cmd, &format!("mount archive '{}' at '{}'", target, mount_str))?;
         Ok(())
     }
 
     pub fn umount_archive(&self, mount_point: &Path) -> Result<(), String> {
         let mount_str = mount_point.to_string_lossy().to_string();
-        let mut cmd = self.prepare_command(&["umount", &mount_str], None);
-        let output = cmd.output().map_err(|e| {
-            BorgError::IoError(format!("Falha ao executar borg umount: {}", e)).to_string()
-        })?;
-
-        if !output.status.success() {
-            let err = BorgError::from_stderr(
-                output.status.code(),
-                &String::from_utf8_lossy(&output.stderr),
-            );
-            return Err(err.to_string());
-        }
-
+        let cmd = self.prepare_command(&["umount", &mount_str], None);
+        self.execute_command(cmd, &format!("umount '{}'", mount_str))?;
         Ok(())
     }
 
@@ -490,8 +500,7 @@ impl BorgManager {
         }
 
         if !dry_run {
-            let mut compact_cmd = self.prepare_command(&["compact", repo_path], passphrase);
-            let _ = compact_cmd.output();
+            let _ = self.compact_repository(repo_path, passphrase);
         }
 
         Ok(items)

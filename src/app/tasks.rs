@@ -44,10 +44,12 @@ impl App {
                         AppState::Browsing
                     };
                 }
-                ThreadStatus::DoneDelete => {
-                    self.load_repository();
+                ThreadStatus::DoneDelete(deleted_name) => {
                     self.loading_start = None;
-                    self.state = AppState::Browsing;
+                    self.load_repository();
+                    if self.state == AppState::Browsing {
+                        self.state = AppState::SuccessPopup(self.t.msg_delete_success_fmt(&deleted_name));
+                    }
                 }
                 ThreadStatus::DoneRestore(target) => {
                     self.loading_start = None;

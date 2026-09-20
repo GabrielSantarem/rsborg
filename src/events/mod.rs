@@ -22,7 +22,33 @@ pub enum EventOutcome {
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent) {
     match &mut app.state {
-        AppState::ErrorPopup(_) | AppState::SuccessPopup(_) | AppState::InitError(_) => {
+        AppState::ErrorPopup(err) => {
+            let is_lock = err.contains("break-lock") || err.contains("bloqueado") || err.contains("locked");
+            if is_lock && (key.code == KeyCode::Char('b') || key.code == KeyCode::Char('B')) {
+                app.break_lock_active_repo();
+                return;
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
+                    app.state = AppState::Browsing;
+                }
+                _ => {}
+            }
+        }
+        AppState::InitError(err) => {
+            let is_lock = err.contains("break-lock") || err.contains("bloqueado") || err.contains("locked");
+            if is_lock && (key.code == KeyCode::Char('b') || key.code == KeyCode::Char('B')) {
+                app.break_lock_active_repo();
+                return;
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
+                    app.state = AppState::Browsing;
+                }
+                _ => {}
+            }
+        }
+        AppState::SuccessPopup(_) => {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') => {
                     app.state = AppState::Browsing;

@@ -84,4 +84,26 @@ impl App {
             }
         }
     }
+
+    pub fn break_lock_active_repo(&mut self) {
+        let (repo_path, passphrase) = match self.get_active_repo() {
+            Some(r) => (r.location.clone(), r.passphrase.clone()),
+            None => (config::get_default_repo_path(), None),
+        };
+
+        crate::log_info!("Attempting break-lock on repository: {}", repo_path);
+        match self.borg_manager.break_lock(&repo_path, passphrase.as_deref()) {
+            Ok(_) => {
+                crate::log_info!("break-lock succeeded on repository: {}", repo_path);
+                self.load_repository();
+                if self.state == AppState::Browsing {
+                    self.state = AppState::SuccessPopup(self.t.msg_break_lock_success().to_string());
+                }
+            }
+            Err(e) => {
+                crate::log_error!("break-lock failed on repository {}: {}", repo_path, e);
+                self.state = AppState::ErrorPopup(e);
+            }
+        }
+    }
 }
