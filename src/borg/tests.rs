@@ -208,4 +208,33 @@ TAM: warning message line that is not json
         let err_generic = BorgError::from_stderr(Some(1), "Some unknown failure");
         assert!(matches!(err_generic, BorgError::CommandFailed { .. }));
     }
+
+    #[test]
+    fn test_deserialize_real_borg_list_json() {
+        let json_sample = r#"{
+            "archives": [
+                {
+                    "archive": "backup1",
+                    "barchive": "backup1",
+                    "id": "f0d844a36aaae56e6e98cac9ad0e73d20cee6f2b54a78769844d6b8fa4bbad50",
+                    "name": "backup1",
+                    "start": "2026-09-19T05:40:45.000000",
+                    "time": "2026-09-19T05:40:45.000000"
+                }
+            ],
+            "encryption": { "mode": "none" },
+            "repository": {
+                "id": "731a661ac4393739d0fe4b02637af7a3c277a02f27d80daa774cf111ae713c8e",
+                "last_modified": "2026-09-19T22:34:49.000000",
+                "location": "/home/tomate/.rsborg/backups"
+            }
+        }"#;
+
+        let res = serde_json::from_str::<BorgArchiveList>(json_sample);
+        assert!(res.is_ok());
+        let list = res.unwrap();
+        assert_eq!(list.archives.len(), 1);
+        assert_eq!(list.archives[0].name, "backup1");
+        assert_eq!(list.repository.location, "/home/tomate/.rsborg/backups");
+    }
 }

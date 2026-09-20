@@ -67,6 +67,8 @@ impl BorgManager {
     }
 
     fn execute_command(&self, mut cmd: Command, desc: &str) -> Result<std::process::Output, String> {
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
         let start = std::time::Instant::now();
         crate::log_info!("[borg] Executing command: {:?}", cmd);
 
@@ -176,8 +178,17 @@ impl BorgManager {
         let output = self.execute_command(cmd, &format!("list archives for '{}'", repo_path))?;
 
         let json_str = String::from_utf8_lossy(&output.stdout);
-        let list: BorgArchiveList = serde_json::from_str(&json_str)
-            .map_err(|e| BorgError::JsonParseError(e.to_string()).to_string())?;
+        let list: BorgArchiveList = serde_json::from_str(&json_str).map_err(|e| {
+            crate::log_error!(
+                "[borg] Failed to parse JSON from 'borg list --json': {} (stdout bytes: {})
+Stdout content:
+{}",
+                e,
+                output.stdout.len(),
+                json_str.trim()
+            );
+            BorgError::JsonParseError(e.to_string()).to_string()
+        })?;
 
         Ok(list)
     }
