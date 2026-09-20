@@ -92,10 +92,10 @@ pub fn render(f: &mut Frame, app: &mut App, screen_area: Rect) {
             let is_selected =
                 i == app.file_browser.selected_index && app.create_focus == CreateFocus::Browser;
 
-            let icon = if entry.is_dir { "📁" } else { "📄" };
+            let icon = if entry.is_dir { "[DIR]" } else { "[FILE]" };
 
             let (prefix, status_text, color) = if entry.is_parent_link {
-                ("[ ⏎ ]", "", Color::Yellow)
+                ("[ .. ]", "", Color::Yellow)
             } else {
                 match app.file_browser.get_status(&entry.path) {
                     ItemStatus::ExplicitInclude => {

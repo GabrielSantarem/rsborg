@@ -194,6 +194,64 @@ impl Translator {
         profile_paths_label => (pt: "4. Selecionar Pastas e Arquivos ([Espaço] inclui / [e] exclui):", en: "4. Select Folders & Files ([Space] include / [e] exclude):"),
         automation_installed_msg => (pt: "Arquivos Systemd criados com sucesso em ~/.config/systemd/user/!", en: "Systemd files successfully created in ~/.config/systemd/user/!"),
         profile_save_prompt => (pt: " [Ctrl+S] Salvar Perfil      [Esc] Cancelar ", en: " [Ctrl+S] Save Profile      [Esc] Cancel "),
+
+        // --- Perfis UI ---
+        profiles_configured_title => (pt: " Perfis Configurados ", en: " Configured Profiles "),
+        profile_label_name => (pt: "Nome do Perfil: ", en: "Profile Name: "),
+        profile_label_compression => (pt: "Compressão: ", en: "Compression: "),
+        profile_label_schedule => (pt: "Frequência: ", en: "Schedule: "),
+        profile_label_runs => (pt: "Execuções Realizadas: ", en: "Completed Runs: "),
+
+        // --- Automação Modal ---
+        automation_modal_title => (pt: " Automação e Agendamento no Linux ", en: " Linux Automation & Scheduling "),
+        automation_tab_service => (pt: " 1. Systemd Service (.service) ", en: " 1. Systemd Service (.service) "),
+        automation_tab_timer => (pt: " 2. Systemd Timer (.timer) ", en: " 2. Systemd Timer (.timer) "),
+        automation_tab_cron => (pt: " 3. Linha Crontab ", en: " 3. Crontab Line "),
+        automation_generated_content_title => (pt: " Conteúdo Gerado ", en: " Generated Content "),
+        automation_footer_prompt => (pt: " [Tab] Alternar Aba    [i] Gravar em ~/.config/systemd/user/    [Esc] Voltar ", en: " [Tab] Switch Tab    [i] Save to ~/.config/systemd/user/    [Esc] Back "),
+
+        // --- Navegação & Empty State ---
+        browse_empty_title => (pt: " [ LISTA DE BACKUPS ] ", en: " [ BACKUP LIST ] "),
+        browse_empty_header => (pt: " [ NENHUM BACKUP ENCONTRADO ] ", en: " [ NO ARCHIVES FOUND ] "),
+        browse_empty_desc => (pt: "O repositório ativo está pronto, mas ainda não possui nenhum snapshot arquivado.", en: "The active repository is ready, but contains no archived snapshots yet."),
+        browse_empty_actions => (pt: "Ações recomendadas:", en: "Recommended actions:"),
+        browse_empty_act1 => (pt: " para criar seu primeiro backup interativo", en: " to create your first interactive backup"),
+        browse_empty_act2 => (pt: " para configurar um perfil automatizado com systemd/cron", en: " to configure an automated profile with systemd/cron"),
+        browse_empty_act3 => (pt: " para alternar para outro repositório com backups existentes", en: " to switch to another repository with existing backups"),
+        browse_press => (pt: "Pressione ", en: "Press "),
+        browse_meta_snapshot => (pt: "  Snapshot:  ", en: "  Snapshot:  "),
+        browse_meta_id => (pt: "  ID:        ", en: "  ID:        "),
+        browse_meta_start => (pt: "  Início:    ", en: "  Start:     "),
+        browse_meta_duration => (pt: "  Duração:   ", en: "  Duration:  "),
+        browse_meta_fuse => (pt: "  FUSE:      ", en: "  FUSE:      "),
+        browse_fuse_unmounted => (pt: " [NÃO MONTADO]", en: " [NOT MOUNTED]"),
+        browse_quick_actions => (pt: "  Ações Rápidas:", en: "  Quick Actions:"),
+        browse_act_explore => (pt: "Explorar conteúdo interno", en: "Explore internal files"),
+        browse_act_mount => (pt: "Montar / Desmontar FUSE", en: "Mount / Unmount FUSE"),
+        browse_act_restore => (pt: "Restaurar este backup", en: "Restore this backup"),
+        browse_act_delete => (pt: "Excluir permanentemente", en: "Delete permanently"),
+
+        // --- Help Modal ---
+        help_title => (pt: " [ AJUDA / ATALHOS DE TECLADO ] ", en: " [ HELP / KEYBOARD SHORTCUTS ] "),
+        help_sec_nav => (pt: "  NAVEGAÇÃO GERAL", en: "  GENERAL NAVIGATION"),
+        help_nav_jk => (pt: "Navegar pelas listas de backups ou arquivos", en: "Navigate backup or file lists"),
+        help_nav_enter => (pt: "Acessar diretório / Confirmar seleção", en: "Enter directory / Confirm selection"),
+        help_nav_esc => (pt: "Voltar à tela anterior / Fechar modal / Sair", en: "Go back / Close modal / Exit"),
+        help_nav_theme => (pt: "Alternar Tema Visual (Rust Oxide <-> Catppuccin Mocha)", en: "Toggle Theme (Rust Oxide <-> Catppuccin Mocha)"),
+        help_nav_lang => (pt: "Alternar Idioma (Português <-> English)", en: "Toggle Language (Português <-> English)"),
+        help_sec_actions => (pt: "  AÇÕES EM SNAPSHOTS", en: "  SNAPSHOT ACTIONS"),
+        help_act_create => (pt: "Criar Novo Backup (Assistente com seletor de arquivos)", en: "Create New Backup (File picker wizard)"),
+        help_act_inspect => (pt: "Inspecionar arquivos dentro do snapshot selecionado", en: "Inspect files inside selected snapshot"),
+        help_act_restore => (pt: "Restaurar snapshot selecionado para disco", en: "Restore selected snapshot to disk"),
+        help_act_mount => (pt: "Montar snapshot via FUSE em ~/.rsborg/mnt / Desmontar", en: "Mount snapshot via FUSE in ~/.rsborg/mnt / Unmount"),
+        help_act_diff => (pt: "Comparar Versões (Diff visual entre dois snapshots)", en: "Compare Versions (Visual diff between two snapshots)"),
+        help_act_check => (pt: "Verificar integridade do repositório (borg check)", en: "Check repository integrity (borg check)"),
+        help_act_prune => (pt: "Política de Retenção & Poda com Simulação (borg prune dry-run)", en: "Retention Policy & Pruning Simulation (borg prune dry-run)"),
+        help_act_delete => (pt: "Excluir snapshot permanentemente do repositório", en: "Permanently delete snapshot from repository"),
+        help_sec_profiles => (pt: "  PERFIS & AUTOMAÇÃO", en: "  PROFILES & AUTOMATION"),
+        help_prof_manage => (pt: "Gerenciar Perfis de Backup e Gerador Systemd/Cron", en: "Manage Backup Profiles and Systemd/Cron Generator"),
+        help_prof_repos => (pt: "Alternar entre Repositórios configurados ou adicionar novo", en: "Switch configured Repositories or add new one"),
+        help_close_hint => (pt: "  [ Pressione Esc, q ou ? para fechar este menu de ajuda ]", en: "  [ Press Esc, q or ? to close this help menu ]"),
     }
 
     // --- Métodos Dinâmicos com Formatação (Parâmetros) ---
@@ -420,8 +478,69 @@ impl Translator {
         }
     }
 
-}
 
+
+    pub fn profile_included_paths_fmt(&self, count: usize) -> String {
+        match self.lang {
+            Language::Pt => format!("Pastas e Arquivos Incluídos ({}):", count),
+            Language::En => format!("Included Folders and Files ({}):", count),
+        }
+    }
+
+    pub fn profile_excluded_paths_fmt(&self, count: usize) -> String {
+        match self.lang {
+            Language::Pt => format!("Pastas e Arquivos Excluídos ({}):", count),
+            Language::En => format!("Excluded Folders and Files ({}):", count),
+        }
+    }
+
+    pub fn browse_fuse_mounted_fmt(&self, path: &str) -> String {
+        match self.lang {
+            Language::Pt => format!(" [MONTADO em {}]", path),
+            Language::En => format!(" [MOUNTED at {}]", path),
+        }
+    }
+
+    pub fn err_mount_fuse_fmt(&self, err: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Erro ao montar backup FUSE:
+{}", err),
+            Language::En => format!("Error mounting FUSE backup:
+{}", err),
+        }
+    }
+
+    pub fn err_umount_fmt(&self, err: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Erro ao desmontar:
+{}", err),
+            Language::En => format!("Error unmounting:
+{}", err),
+        }
+    }
+
+    pub fn err_systemd_dir_fmt(&self, err: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Erro ao criar diretório systemd: {}", err),
+            Language::En => format!("Error creating systemd directory: {}", err),
+        }
+    }
+
+    pub fn err_service_file_fmt(&self, err: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Erro ao salvar arquivo .service: {}", err),
+            Language::En => format!("Error saving .service file: {}", err),
+        }
+    }
+
+    pub fn err_timer_file_fmt(&self, err: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Erro ao salvar arquivo .timer: {}", err),
+            Language::En => format!("Error saving .timer file: {}", err),
+        }
+    }
+
+}
 
 #[cfg(test)]
 mod tests {

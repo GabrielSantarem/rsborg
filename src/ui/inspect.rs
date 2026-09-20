@@ -22,11 +22,7 @@ pub fn render(f: &mut Frame, t: &Translator, inspect: &InspectState, screen_area
     f.render_widget(block, area);
 
     let rows = inspect.entries.iter().map(|entry| {
-        let icon = if entry.entry_type == "d" {
-            "📁 "
-        } else {
-            "📄 "
-        };
+        let icon = if entry.entry_type == "d" { "[DIR] " } else { "[FILE] " };
         let size_kb = format!("{:.1} KB", entry.size as f32 / 1024.0);
         Row::new(vec![
             Cell::from(entry.mode.clone()),

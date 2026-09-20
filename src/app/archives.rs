@@ -237,7 +237,7 @@ impl App {
                 }
                 Err(e) => {
                     self.state =
-                        AppState::ErrorPopup(format!("Erro ao montar backup FUSE:\n{}", e));
+                        AppState::ErrorPopup(self.t.err_mount_fuse_fmt(&e));
                 }
             }
         }
@@ -257,7 +257,7 @@ impl App {
                     }
                     Err(e) => {
                         self.mounted_archives.insert(name, mount_point);
-                        self.state = AppState::ErrorPopup(format!("Erro ao desmontar:\n{}", e));
+                        self.state = AppState::ErrorPopup(self.t.err_umount_fmt(&e));
                     }
                 }
             } else {

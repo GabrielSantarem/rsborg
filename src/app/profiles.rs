@@ -181,7 +181,7 @@ impl App {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let unit_dir = Path::new(&home).join(".config/systemd/user");
         if let Err(e) = std::fs::create_dir_all(&unit_dir) {
-            self.state = AppState::ErrorPopup(format!("Erro ao criar diretório systemd: {}", e));
+            self.state = AppState::ErrorPopup(self.t.err_systemd_dir_fmt(&e.to_string()));
             return;
         }
 
@@ -192,12 +192,12 @@ impl App {
         let timer_content = profile.generate_systemd_timer();
 
         if let Err(e) = std::fs::write(&service_file, service_content) {
-            self.state = AppState::ErrorPopup(format!("Erro ao salvar arquivo .service: {}", e));
+            self.state = AppState::ErrorPopup(self.t.err_service_file_fmt(&e.to_string()));
             return;
         }
 
         if let Err(e) = std::fs::write(&timer_file, timer_content) {
-            self.state = AppState::ErrorPopup(format!("Erro ao salvar arquivo .timer: {}", e));
+            self.state = AppState::ErrorPopup(self.t.err_timer_file_fmt(&e.to_string()));
             return;
         }
 

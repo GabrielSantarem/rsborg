@@ -193,11 +193,8 @@ pub fn render_help_modal(f: &mut Frame, app: &App, screen_area: Rect) {
     let area = centered_rect(78, 80, screen_area);
     f.render_widget(Clear, area);
 
-    let is_pt = app.t.lang == crate::i18n::Language::Pt;
-    let title = if is_pt { " [ AJUDA / ATALHOS DE TECLADO ] " } else { " [ HELP / KEYBOARD SHORTCUTS ] " };
-
     let block = Block::default()
-        .title(title)
+        .title(app.t.help_title())
         .borders(Borders::ALL)
         .style(app.theme.block_active());
 
@@ -206,83 +203,76 @@ pub fn render_help_modal(f: &mut Frame, app: &App, screen_area: Rect) {
     let desc_style = Style::default().fg(app.theme.text);
     let hint_style = Style::default().fg(app.theme.text_muted);
 
-    let mut lines = Vec::new();
-    lines.push(Line::from(""));
-
-    let sec1_title = if is_pt { "  NAVEGAÇÃO GERAL" } else { "  GENERAL NAVIGATION" };
-    lines.push(Line::from(Span::styled(sec1_title, sec_style)));
-    lines.push(Line::from(vec![
-        Span::styled("    [j/k] ou [Setas]  ", key_style),
-        Span::styled(if is_pt { "Navegar pelas listas de backups ou arquivos" } else { "Navigate backup or file lists" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [Enter]           ", key_style),
-        Span::styled(if is_pt { "Acessar diretório / Confirmar seleção" } else { "Enter directory / Confirm selection" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [Esc] ou [q]      ", key_style),
-        Span::styled(if is_pt { "Voltar à tela anterior / Fechar modal / Sair" } else { "Go back / Close modal / Exit" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [t] ou [T]        ", key_style),
-        Span::styled(if is_pt { "Alternar Tema Visual (Rust Oxide <-> Catppuccin Mocha)" } else { "Toggle Theme (Rust Oxide <-> Catppuccin Mocha)" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [l] ou [L]        ", key_style),
-        Span::styled(if is_pt { "Alternar Idioma (Português <-> English)" } else { "Toggle Language (Português <-> English)" }, desc_style),
-    ]));
-    lines.push(Line::from(""));
-
-    let sec2_title = if is_pt { "  AÇÕES EM SNAPSHOTS" } else { "  SNAPSHOT ACTIONS" };
-    lines.push(Line::from(Span::styled(sec2_title, sec_style)));
-    lines.push(Line::from(vec![
-        Span::styled("    [c]               ", key_style),
-        Span::styled(if is_pt { "Criar Novo Backup (Assistente com seletor de arquivos)" } else { "Create New Backup (File picker wizard)" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [Enter]           ", key_style),
-        Span::styled(if is_pt { "Inspecionar arquivos dentro do snapshot selecionado" } else { "Inspect files inside selected snapshot" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [x]               ", key_style),
-        Span::styled(if is_pt { "Restaurar snapshot selecionado para disco" } else { "Restore selected snapshot to disk" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [m] / [u]         ", key_style),
-        Span::styled(if is_pt { "Montar snapshot via FUSE em ~/.rsborg/mnt / Desmontar" } else { "Mount snapshot via FUSE in ~/.rsborg/mnt / Unmount" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [f]               ", key_style),
-        Span::styled(if is_pt { "Comparar Versões (Diff visual entre dois snapshots)" } else { "Compare Versions (Visual diff between two snapshots)" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [v]               ", key_style),
-        Span::styled(if is_pt { "Verificar integridade do repositório (borg check)" } else { "Check repository integrity (borg check)" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [p]               ", key_style),
-        Span::styled(if is_pt { "Política de Retenção & Poda com Simulação (borg prune dry-run)" } else { "Retention Policy & Pruning Simulation (borg prune dry-run)" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [d]               ", key_style),
-        Span::styled(if is_pt { "Excluir snapshot permanentemente do repositório" } else { "Permanently delete snapshot from repository" }, desc_style),
-    ]));
-    lines.push(Line::from(""));
-
-    let sec3_title = if is_pt { "  PERFIS & AUTOMAÇÃO" } else { "  PROFILES & AUTOMATION" };
-    lines.push(Line::from(Span::styled(sec3_title, sec_style)));
-    lines.push(Line::from(vec![
-        Span::styled("    [b]               ", key_style),
-        Span::styled(if is_pt { "Gerenciar Perfis de Backup e Gerador Systemd/Cron" } else { "Manage Backup Profiles and Systemd/Cron Generator" }, desc_style),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    [r]               ", key_style),
-        Span::styled(if is_pt { "Alternar entre Repositórios configurados ou adicionar novo" } else { "Switch configured Repositories or add new one" }, desc_style),
-    ]));
-    lines.push(Line::from(""));
-
-    let close_hint = if is_pt { "  [ Pressione Esc, q ou ? para fechar este menu de ajuda ]" } else { "  [ Press Esc, q or ? to close this help menu ]" };
-    lines.push(Line::from(Span::styled(close_hint, hint_style)));
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(app.t.help_sec_nav(), sec_style)),
+        Line::from(vec![
+            Span::styled("    [j/k] ou [Setas]  ", key_style),
+            Span::styled(app.t.help_nav_jk(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [Enter]           ", key_style),
+            Span::styled(app.t.help_nav_enter(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [Esc] ou [q]      ", key_style),
+            Span::styled(app.t.help_nav_esc(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [t] ou [T]        ", key_style),
+            Span::styled(app.t.help_nav_theme(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [l] ou [L]        ", key_style),
+            Span::styled(app.t.help_nav_lang(), desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(app.t.help_sec_actions(), sec_style)),
+        Line::from(vec![
+            Span::styled("    [c]               ", key_style),
+            Span::styled(app.t.help_act_create(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [Enter]           ", key_style),
+            Span::styled(app.t.help_act_inspect(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [x]               ", key_style),
+            Span::styled(app.t.help_act_restore(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [m] / [u]         ", key_style),
+            Span::styled(app.t.help_act_mount(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [f]               ", key_style),
+            Span::styled(app.t.help_act_diff(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [v]               ", key_style),
+            Span::styled(app.t.help_act_check(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [p]               ", key_style),
+            Span::styled(app.t.help_act_prune(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [d]               ", key_style),
+            Span::styled(app.t.help_act_delete(), desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(app.t.help_sec_profiles(), sec_style)),
+        Line::from(vec![
+            Span::styled("    [b]               ", key_style),
+            Span::styled(app.t.help_prof_manage(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [r]               ", key_style),
+            Span::styled(app.t.help_prof_repos(), desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(app.t.help_close_hint(), hint_style)),
+    ];
 
     let p = Paragraph::new(lines).block(block);
     f.render_widget(p, area);
