@@ -8,224 +8,200 @@ pub struct Translator {
     pub lang: Language,
 }
 
+macro_rules! tr {
+    ($( $(#[$meta:meta])* $name:ident => (pt: $pt:expr, en: $en:expr) ),* $(,)?) => {
+        $(
+            $(#[$meta])*
+            pub fn $name(&self) -> &'static str {
+                match self.lang {
+                    Language::Pt => $pt,
+                    Language::En => $en,
+                }
+            }
+        )*
+    };
+}
+
 impl Translator {
     pub fn new(lang: Language) -> Self {
         Self { lang }
     }
 
-    // --- 1. Geral / Cabeçalho ---
-    pub fn title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "RsBorg - Gerenciador de Backups",
-            Language::En => "RsBorg - Backup Manager",
-        }
-    }
-
-    pub fn header_repo(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Repositório Ativo",
-            Language::En => "Active Repository",
-        }
-    }
-
-    pub fn default_local(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Padrão Local",
-            Language::En => "Local Default",
-        }
-    }
-
-    pub fn unknown(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Desconhecido",
-            Language::En => "Unknown",
-        }
-    }
-
-    pub fn checking_borg(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Borg: Verificando...",
-            Language::En => "Borg: Checking...",
-        }
-    }
-
-    pub fn success_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Concluído / Sucesso ",
-            Language::En => " Completed / Success ",
-        }
-    }
-
-    pub fn warning_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Aviso / Warning ",
-            Language::En => " Warning ",
-        }
-    }
-
-    // --- 2. Rodapés de Atalho (Footers) ---
-    #[allow(dead_code)]
-    pub fn footer_main(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
+    tr! {
+        title => (pt: "RsBorg - Gerenciador de Backups", en: "RsBorg - Backup Manager"),
+        header_repo => (pt: "Repositório Ativo", en: "Active Repository"),
+        default_local => (pt: "Padrão Local", en: "Local Default"),
+        unknown => (pt: "Desconhecido", en: "Unknown"),
+        checking_borg => (pt: "Borg: Verificando...", en: "Borg: Checking..."),
+        success_title => (pt: " Concluído / Sucesso ", en: " Completed / Success "),
+        warning_title => (pt: " Aviso / Warning ", en: " Warning "),
+        #[allow(dead_code)]
+        footer_main => (pt: {
                 " [c] Criar | [b] Perfis | [Enter] Inspecionar | [f] Diff | [v] Verificar | [p] Retenção | [x] Restaurar | [m/u] Montar | [d] Deletar | [r] Repos | [l] Idioma | [q] Sair"
-            }
-            Language::En => {
+            }, en: {
                 " [c] Create | [b] Profiles | [Enter] Inspect | [f] Diff | [v] Verify | [p] Prune | [x] Restore | [m/u] Mount | [d] Delete | [r] Repos | [l] Language | [q] Quit"
-            }
-        }
-    }
-
-    pub fn footer_creating(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
+            }),
+        footer_creating => (pt: {
                 " [Tab] Alternar Foco | [Espaço] Incluir/Excluir | [Enter/→] Entrar | [BS/←] Subir | [s / Ctrl+S] Criar | [Esc] Cancelar "
-            }
-            Language::En => {
+            }, en: {
                 " [Tab] Switch Focus | [Space] Include/Exclude | [Enter/→] Enter | [BS/←] Up | [s / Ctrl+S] Create | [Esc] Cancel "
-            }
-        }
-    }
-
-    pub fn footer_confirm_delete(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [y / Enter] Confirmar Exclusão | [n / Esc] Cancelar ",
-            Language::En => " [y / Enter] Confirm Deletion | [n / Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_confirm_restore(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
+            }),
+        footer_confirm_delete => (pt: " [y / Enter] Confirmar Exclusão | [n / Esc] Cancelar ", en: " [y / Enter] Confirm Deletion | [n / Esc] Cancel "),
+        footer_confirm_restore => (pt: {
                 " [Enter] Iniciar Restauração | [Backspace] Editar Destino | [Esc] Cancelar "
-            }
-            Language::En => " [Enter] Start Restore | [Backspace] Edit Destination | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_inspect(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
+            }, en: " [Enter] Start Restore | [Backspace] Edit Destination | [Esc] Cancel "),
+        footer_inspect => (pt: {
                 " [x] Restaurar Item Selecionado | [j/k/Setas] Rolar | [Esc / Enter] Voltar "
-            }
-            Language::En => {
+            }, en: {
                 " [x] Restore Selected Item | [j/k/Arrows] Scroll | [Esc / Enter] Back "
-            }
-        }
+            }),
+        footer_pruning_policy => (pt: " [Tab/Setas] Campo | [Enter/s] Simular (Dry-Run) | [Esc] Cancelar ", en: " [Tab/Arrows] Field | [Enter/s] Simulate (Dry-Run) | [Esc] Cancel "),
+        footer_prune_plan => (pt: " [y] Confirmar Limpeza Definitiva | [j/k] Rolar | [n / Esc] Cancelar ", en: " [y] Confirm Permanent Prune | [j/k] Scroll | [n / Esc] Cancel "),
+        footer_managing_repos => (pt: " [Enter] Ativar | [a] Adicionar | [d] Remover | [Esc] Voltar ", en: " [Enter] Activate | [a] Add | [d] Remove | [Esc] Back "),
+        footer_adding_repo => (pt: " [Tab] Alternar Campo | [Enter] Salvar Repositório | [Esc] Cancelar ", en: " [Tab] Switch Field | [Enter] Save Repository | [Esc] Cancel "),
+        footer_popup => (pt: " [Esc / Enter] Fechar ", en: " [Esc / Enter] Close "),
+        footer_profiles => (pt: " [Enter] Executar Backup | [a] Novo Perfil | [s] Automação Systemd/Cron | [d] Excluir | [Esc] Voltar ", en: " [Enter] Run Backup Now | [a] New Profile | [s] Systemd/Cron Automation | [d] Delete | [Esc] Back "),
+        footer_profile_wizard => (pt: " [Tab] Campo | [←/→] Opção | [Espaço] Incluir | [e] Excluir | [Ctrl+S] Salvar | [Esc] Cancelar ", en: " [Tab] Field | [←/→] Option | [Space] Include | [e] Exclude | [Ctrl+S] Save | [Esc] Cancel "),
+        footer_automation_view => (pt: " [Tab] Alternar Aba | [i] Instalar no Systemd User | [Esc] Voltar ", en: " [Tab] Switch Tab | [i] Install to Systemd User | [Esc] Back "),
+        footer_loading => (pt: " Executando tarefa do Borg em segundo plano... ", en: " Running Borg task in background... "),
+        table_title => (pt: " Lista de Backups ", en: " Backup List "),
+        metadata_title => (pt: " Metadados / Info ", en: " Metadata / Info "),
+        col_name => (pt: "Nome", en: "Name"),
+        col_start => (pt: "Criado em", en: "Created at"),
+        no_backup_selected => (pt: "Nenhum backup selecionado", en: "No backup selected"),
+        #[allow(dead_code)]
+        fuse_not_mounted => (pt: "Não montado", en: "Not mounted"),
+        backup_wizard_title => (pt: " Assistente de Backup / Backup Wizard ", en: " Backup Wizard "),
+        backup_name_field_title => (pt: "1. Nome do Backup (digite e aperte Tab para ir aos arquivos)", en: "1. Backup Name (type and press Tab to go to files)"),
+        legend_label => (pt: "Legenda: ", en: "Legend: "),
+        legend_included => (pt: "[+] Incluído ", en: "[+] Included "),
+        legend_inherited => (pt: "[✓] Herdado ", en: "[✓] Inherited "),
+        legend_excluded => (pt: "[-] Excluído ", en: "[-] Excluded "),
+        legend_unselected => (pt: "[ ] Não selecionado ", en: "[ ] Unselected "),
+        item_status_included => (pt: " (Incluído)", en: " (Included)"),
+        item_status_inherited => (pt: " (Herdado do pai)", en: " (Inherited from parent)"),
+        item_status_excluded => (pt: " (Excluído)", en: " (Excluded)"),
+        item_status_parent_excluded => (pt: " (Pai excluído)", en: " (Parent excluded)"),
+        restore_wizard_title => (pt: " Assistente de Restauração / Extract ", en: " Restore Wizard / Extract "),
+        restore_selected_backup_title => (pt: "Backup Selecionado", en: "Selected Backup"),
+        restore_destination_dir_title => (pt: "Diretório de Destino (digite para alterar)", en: "Destination Directory (type to change)"),
+        restore_all_files => (pt: "Restauração Total (Todos os arquivos do backup)", en: "Full Restore (All backup files)"),
+        btn_start_extraction => (pt: " [Enter] Iniciar Extração ", en: " [Enter] Start Extraction "),
+        btn_cancel => (pt: " [Esc] Cancelar ", en: " [Esc] Cancel "),
+        col_permissions => (pt: "Permissões", en: "Permissions"),
+        col_size => (pt: "Tamanho", en: "Size"),
+        col_path => (pt: "Caminho do Arquivo", en: "File Path"),
+        prune_policy_title => (pt: " Políticas de Retenção e Limpeza Automática (Borg Prune) ", en: " Automatic Retention & Cleanup Policies (Borg Prune) "),
+        prune_keep_last => (pt: "1. Manter últimos N backups (--keep-last):", en: "1. Keep last N backups (--keep-last):"),
+        prune_keep_daily => (pt: "2. Manter backups diários (--keep-daily):", en: "2. Keep daily backups (--keep-daily):"),
+        prune_keep_weekly => (pt: "3. Manter backups semanais (--keep-weekly):", en: "3. Keep weekly backups (--keep-weekly):"),
+        prune_keep_monthly => (pt: "4. Manter backups mensais (--keep-monthly):", en: "4. Keep monthly backups (--keep-monthly):"),
+        prune_keep_yearly => (pt: "5. Manter backups anuais (--keep-yearly):", en: "5. Keep yearly backups (--keep-yearly):"),
+        prune_prefix => (pt: "6. Filtrar por Prefixo (--prefix, opcional):", en: "6. Filter by Prefix (--prefix, optional):"),
+        prune_hint => (pt: {
+                "💡 Dica: Deixe vazio para desativar a regra. NENHUM dado será apagado na simulação!"
+            }, en: {
+                "💡 Tip: Leave empty to disable rule. NO data will be deleted during simulation!"
+            }),
+        prune_prompt_button => (pt: " [s / Enter] Simular Retenção (Dry-Run)      [Esc] Cancelar ", en: " [s / Enter] Simulate Retention (Dry-Run)      [Esc] Cancel "),
+        plan_total_evaluated_label => (pt: "Total de backups avaliados: ", en: "Total backups evaluated: "),
+        col_action => (pt: "Ação", en: "Action"),
+        col_date => (pt: "Data", en: "Date"),
+        col_applied_rule => (pt: "Regra Aplicada", en: "Applied Rule"),
+        badge_keep => (pt: "[✓ MANTER]", en: "[✓ KEEP]"),
+        badge_prune => (pt: "[✗ ELIMINAR]", en: "[✗ PRUNE]"),
+        plan_confirm_button => (pt: " [y] Confirmar Limpeza e Liberar Espaço com 'compact' ", en: " [y] Confirm Cleanup and Reclaim Space with 'compact' "),
+        plan_none_to_prune => (pt: {
+                "Todos os backups atendem à sua política de retenção! Nenhum será apagado. [Esc] Voltar"
+            }, en: {
+                "All backups meet your retention policy! None will be deleted. [Esc] Back"
+            }),
+        repos_title => (pt: " Gerenciador de Repositórios ", en: " Repository Manager "),
+        repos_list_title => (pt: " Repositórios Cadastrados ", en: " Registered Repositories "),
+        badge_active => (pt: " [ATIVO] ", en: " [ACTIVE] "),
+        encrypted_label => (pt: "🔒 Criptografado", en: "🔒 Encrypted"),
+        unencrypted_label => (pt: "🔓 Sem senha", en: "🔓 No passphrase"),
+        add_repo_title => (pt: " Adicionar Novo Repositório ", en: " Add New Repository "),
+        field_repo_name_title => (pt: "1. Nome Identificador (ex: HD Externo, Servidor Remoto)", en: "1. Identifier Name (e.g., External HD, Remote Server)"),
+        field_repo_loc_title => (pt: "2. Localização (ex: /run/media/... ou ssh://user@host/repo)", en: "2. Location (e.g., /run/media/... or ssh://user@host/repo)"),
+        field_repo_pass_title => (pt: "3. Senha / Passphrase (Opcional - deixe vazio se não tiver)", en: "3. Passphrase (Optional - leave empty if unencrypted)"),
+        confirm_delete_title => (pt: " Confirmar Exclusão ", en: " Confirm Deletion "),
+        confirm_delete_question => (pt: "Tem certeza que deseja apagar o backup ", en: "Are you sure you want to delete backup "),
+        confirm_delete_warning => (pt: {
+                "Esta ação é IRREVERSÍVEL. O borg apagará os dados e executará 'borg compact'."
+            }, en: {
+                "This action is IRREVERSIBLE. Borg will delete the data and run 'borg compact'."
+            }),
+        confirm_delete_btn_yes => (pt: "[y] Sim, Apagar Definitivamente", en: "[y] Yes, Delete Permanently"),
+        confirm_delete_btn_cancel => (pt: "[n / Esc] Cancelar", en: "[n / Esc] Cancel"),
+        telemetry_elapsed => (pt: "⏱️  Tempo decorrido: ", en: "⏱️  Elapsed time: "),
+        telemetry_files_count => (pt: "📦  Arquivos processados: ", en: "📦  Files processed: "),
+        telemetry_original_size => (pt: "📊  Tamanho Original: ", en: "📊  Original Size: "),
+        telemetry_compressed_size => (pt: "  |  Comprimido: ", en: "  |  Compressed: "),
+        telemetry_deduplicated_size => (pt: "  |  Deduplicado: ", en: "  |  Deduplicated: "),
+        telemetry_current_file => (pt: "📄  Arquivo atual: ", en: "📄  Current file: "),
+        telemetry_processing => (pt: "Processando dados...", en: "Processing data..."),
+        err_name_empty => (pt: "O nome do backup não pode ser vazio!", en: "Backup name cannot be empty!"),
+        err_name_invalid => (pt: "O nome do backup não pode conter caracteres reservados (/ ou :)!", en: "Backup name cannot contain reserved characters (/ or :)!"),
+        err_no_files => (pt: {
+                "Você precisa selecionar pelo menos um arquivo ou pasta para incluir no backup!"
+            }, en: "You must select at least one file or folder to include in the backup!"),
+        err_repo_name_empty => (pt: "O nome do repositório não pode ser vazio!", en: "Repository name cannot be empty!"),
+        err_repo_loc_empty => (pt: "A localização do repositório não pode ser vazia!", en: "Repository location cannot be empty!"),
+        err_fuse_unsupported => (pt: "Montagem FUSE não é suportada em repositórios remotos", en: "FUSE mount is not supported on remote repositories"),
+        msg_umount_success => (pt: "Ponto de montagem desmontado com sucesso!", en: "Mount point successfully unmounted!"),
+        loading_pruning_sim => (pt: "Simulando regras de retenção (dry-run)...", en: "Simulating retention rules (dry-run)..."),
+        loading_pruning_exec => (pt: "Executando limpeza e compactação do repositório...", en: "Executing repository prune and compaction..."),
+        check_wizard_title => (pt: " Diagnóstico e Verificação de Integridade (Borg Check) ", en: " Integrity Diagnosis & Verification (Borg Check) "),
+        check_target_title => (pt: "1. Alvo da Verificação ([Tab] para alternar)", en: "1. Verification Target ([Tab] to toggle)"),
+        check_target_entire_repo => (pt: "Repositório Completo (Todos os arquivos e índices)", en: "Entire Repository (All archives and indexes)"),
+        check_mode_title => (pt: "2. Modo de Diagnóstico ([↑/↓] para navegar)", en: "2. Diagnostic Mode ([↑/↓] to navigate)"),
+        check_mode_quick => (pt: "Rápido (--repository-only): Valida estruturas do repo e índices de chunks", en: "Quick (--repository-only): Validates repo structure and chunk indexes"),
+        check_mode_standard => (pt: "Padrão (Repo + Arquivos): Valida integridade do repo e manifestos dos backups", en: "Standard (Repo + Archives): Validates repo integrity and backup manifests"),
+        check_mode_verify_data => (pt: "Profundo (--verify-data): Descriptografa e valida integridade de TODOS os dados (Mais lento)", en: "Deep (--verify-data): Decrypts and verifies integrity of ALL data chunks (Slower)"),
+        check_mode_repair => (pt: "Reparo (--repair): Tenta reconstruir índices e recuperar dados corrompidos (Avançado)", en: "Repair (--repair): Attempts to rebuild indexes and salvage corrupted data (Advanced)"),
+        check_start_prompt => (pt: " [Enter] Iniciar Diagnóstico      [Esc] Cancelar ", en: " [Enter] Start Diagnosis      [Esc] Cancel "),
+        check_result_title => (pt: " Relatório de Diagnóstico e Integridade ", en: " Diagnostic & Integrity Report "),
+        check_status_healthy => (pt: "🟢 CONSISTENTE: Nenhum problema ou corrupção detectada!", en: "🟢 HEALTHY: No inconsistencies or corruption detected!"),
+        check_status_warning => (pt: "🟡 AVISOS: Inconsistências leves ou avisos detectados.", en: "🟡 WARNINGS: Minor inconsistencies or warnings detected."),
+        check_status_corrupted => (pt: "🔴 ERRO: Corrupção ou inconsistência grave detectada!", en: "🔴 ERROR: Serious corruption or inconsistency detected!"),
+        check_logs_header => (pt: " Logs e Mensagens do Borg (stderr) ", en: " Borg Diagnostic Output (stderr) "),
+        footer_check_wizard => (pt: " [Tab] Alvo | [↑/↓] Modo | [Enter] Executar Diagnóstico | [Esc] Cancelar ", en: " [Tab] Target | [↑/↓] Mode | [Enter] Run Diagnosis | [Esc] Cancel "),
+        footer_check_result => (pt: " [j/k/Setas] Rolar Logs | [Esc / Enter] Voltar ", en: " [j/k/Arrows] Scroll Logs | [Esc / Enter] Back "),
+        diff_wizard_title => (pt: " Comparação entre Backups (Borg Diff) ", en: " Backup Comparison (Borg Diff) "),
+        diff_base_title => (pt: "1. Backup Base (Origem / Mais Antigo)", en: "1. Base Backup (Source / Older)"),
+        diff_target_title => (pt: "2. Backup Alvo para Comparação ([↑/↓] para escolher)", en: "2. Target Backup to Compare ([↑/↓] to select)"),
+        diff_start_prompt => (pt: " [Enter] Comparar Alterações      [Esc] Cancelar ", en: " [Enter] Compare Changes      [Esc] Cancel "),
+        diff_view_title => (pt: " Relatório de Alterações (Diff) ", en: " Changes Report (Diff) "),
+        diff_col_type => (pt: "Tipo", en: "Type"),
+        diff_col_change => (pt: "Variação / Detalhes", en: "Change / Details"),
+        diff_col_path => (pt: "Caminho do Arquivo", en: "File Path"),
+        diff_badge_added => (pt: "[+ NOVO]", en: "[+ ADDED]"),
+        diff_badge_removed => (pt: "[- REMOVIDO]", en: "[- REMOVED]"),
+        diff_badge_modified => (pt: "[~ MODIFICADO]", en: "[~ MODIFIED]"),
+        diff_badge_metadata => (pt: "[⚙ METADADOS]", en: "[⚙ METADATA]"),
+        diff_no_changes => (pt: "Nenhuma alteração detectada entre estes backups (conteúdo e metadados idênticos).", en: "No changes detected between these backups (content and metadata are identical)."),
+        diff_err_need_two => (pt: "Você precisa de pelo menos 2 backups para realizar uma comparação!", en: "You need at least 2 backups to perform a comparison!"),
+        footer_diff_wizard => (pt: " [↑/↓] Selecionar Alvo | [Tab] Conteúdo apenas | [Enter] Comparar | [Esc] Cancelar ", en: " [↑/↓] Select Target | [Tab] Content only | [Enter] Compare | [Esc] Cancel "),
+        footer_diff_view => (pt: " [j/k/Setas] Navegar Alterações | [Esc / Enter] Voltar ", en: " [j/k/Arrows] Navigate Changes | [Esc / Enter] Back "),
+        profiles_title => (pt: " Conjuntos e Perfis de Backup Automático ", en: " Automated Backup Sets & Profiles "),
+        profiles_empty => (pt: "Nenhum conjunto cadastrado ainda. Pressione [a] para criar seu primeiro perfil de backup!", en: "No backup profiles registered yet. Press [a] to create your first backup profile!"),
+        profile_details_title => (pt: " Detalhes do Perfil Selecionado ", en: " Selected Profile Details "),
+        profile_wizard_title => (pt: " Criar Novo Conjunto de Backup ", en: " Create New Backup Profile "),
+        profile_name_label => (pt: "1. Nome do Conjunto (ex: BACKUP_DIARIO, FOTOS):", en: "1. Profile Name (e.g. BACKUP_DIARIO, PHOTOS):"),
+        profile_compression_label => (pt: "2. Algoritmo de Compressão ([←/→] para alternar):", en: "2. Compression Algorithm ([←/→] to switch):"),
+        profile_schedule_label => (pt: "3. Agendamento Frequência ([←/→] para alternar):", en: "3. Schedule Frequency ([←/→] to switch):"),
+        profile_paths_label => (pt: "4. Selecionar Pastas e Arquivos ([Espaço] inclui / [e] exclui):", en: "4. Select Folders & Files ([Space] include / [e] exclude):"),
+        automation_installed_msg => (pt: "Arquivos Systemd criados com sucesso em ~/.config/systemd/user/!", en: "Systemd files successfully created in ~/.config/systemd/user/!"),
+        profile_save_prompt => (pt: " [Ctrl+S] Salvar Perfil      [Esc] Cancelar ", en: " [Ctrl+S] Save Profile      [Esc] Cancel "),
     }
 
-    pub fn footer_pruning_policy(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Tab/Setas] Campo | [Enter/s] Simular (Dry-Run) | [Esc] Cancelar ",
-            Language::En => " [Tab/Arrows] Field | [Enter/s] Simulate (Dry-Run) | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_prune_plan(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [y] Confirmar Limpeza Definitiva | [j/k] Rolar | [n / Esc] Cancelar ",
-            Language::En => " [y] Confirm Permanent Prune | [j/k] Scroll | [n / Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_managing_repos(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Enter] Ativar | [a] Adicionar | [d] Remover | [Esc] Voltar ",
-            Language::En => " [Enter] Activate | [a] Add | [d] Remove | [Esc] Back ",
-        }
-    }
-
-    pub fn footer_adding_repo(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Tab] Alternar Campo | [Enter] Salvar Repositório | [Esc] Cancelar ",
-            Language::En => " [Tab] Switch Field | [Enter] Save Repository | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_popup(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Esc / Enter] Fechar ",
-            Language::En => " [Esc / Enter] Close ",
-        }
-    }
-    pub fn footer_profiles(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Enter] Executar Backup | [a] Novo Perfil | [s] Automação Systemd/Cron | [d] Excluir | [Esc] Voltar ",
-            Language::En => " [Enter] Run Backup Now | [a] New Profile | [s] Systemd/Cron Automation | [d] Delete | [Esc] Back ",
-        }
-    }
-
-    pub fn footer_profile_wizard(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Tab] Campo | [←/→] Opção | [Espaço] Incluir | [e] Excluir | [Ctrl+S] Salvar | [Esc] Cancelar ",
-            Language::En => " [Tab] Field | [←/→] Option | [Space] Include | [e] Exclude | [Ctrl+S] Save | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_automation_view(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Tab] Alternar Aba | [i] Instalar no Systemd User | [Esc] Voltar ",
-            Language::En => " [Tab] Switch Tab | [i] Install to Systemd User | [Esc] Back ",
-        }
-    }
-
-
-    pub fn footer_loading(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Executando tarefa do Borg em segundo plano... ",
-            Language::En => " Running Borg task in background... ",
-        }
-    }
-
-    // --- 3. Tabela Principal e Painel de Metadados ---
-    pub fn table_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Lista de Backups ",
-            Language::En => " Backup List ",
-        }
-    }
-
-    pub fn metadata_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Metadados / Info ",
-            Language::En => " Metadata / Info ",
-        }
-    }
-
-    pub fn col_name(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Nome",
-            Language::En => "Name",
-        }
-    }
-
-    pub fn col_start(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Criado em",
-            Language::En => "Created at",
-        }
-    }
-
-    pub fn no_backup_selected(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Nenhum backup selecionado",
-            Language::En => "No backup selected",
-        }
-    }
-
+    // --- Métodos Dinâmicos com Formatação (Parâmetros) ---
     #[allow(dead_code)]
     pub fn fuse_mounted_fmt(&self, path: &str) -> String {
         match self.lang {
             Language::Pt => format!("Sim (em {})", path),
             Language::En => format!("Yes (at {})", path),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn fuse_not_mounted(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Não montado",
-            Language::En => "Not mounted",
         }
     }
 
@@ -251,117 +227,10 @@ impl Translator {
         }
     }
 
-    // --- 4. Assistente de Criação de Backup ---
-    pub fn backup_wizard_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Assistente de Backup / Backup Wizard ",
-            Language::En => " Backup Wizard ",
-        }
-    }
-
-    pub fn backup_name_field_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Nome do Backup (digite e aperte Tab para ir aos arquivos)",
-            Language::En => "1. Backup Name (type and press Tab to go to files)",
-        }
-    }
-
-    pub fn legend_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Legenda: ",
-            Language::En => "Legend: ",
-        }
-    }
-
-    pub fn legend_included(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[+] Incluído ",
-            Language::En => "[+] Included ",
-        }
-    }
-
-    pub fn legend_inherited(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[✓] Herdado ",
-            Language::En => "[✓] Inherited ",
-        }
-    }
-
-    pub fn legend_excluded(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[-] Excluído ",
-            Language::En => "[-] Excluded ",
-        }
-    }
-
-    pub fn legend_unselected(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[ ] Não selecionado ",
-            Language::En => "[ ] Unselected ",
-        }
-    }
-
     pub fn file_browser_title_fmt(&self, path: &str) -> String {
         match self.lang {
             Language::Pt => format!(" 2. Selecionar Arquivos / Pastas  [{}] ", path),
             Language::En => format!(" 2. Select Files / Folders  [{}] ", path),
-        }
-    }
-
-    pub fn item_status_included(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " (Incluído)",
-            Language::En => " (Included)",
-        }
-    }
-
-    pub fn item_status_inherited(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " (Herdado do pai)",
-            Language::En => " (Inherited from parent)",
-        }
-    }
-
-    pub fn item_status_excluded(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " (Excluído)",
-            Language::En => " (Excluded)",
-        }
-    }
-
-    pub fn item_status_parent_excluded(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " (Pai excluído)",
-            Language::En => " (Parent excluded)",
-        }
-    }
-
-    // --- 5. Assistente de Restauração ---
-    pub fn restore_wizard_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Assistente de Restauração / Extract ",
-            Language::En => " Restore Wizard / Extract ",
-        }
-    }
-
-    pub fn restore_selected_backup_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Backup Selecionado",
-            Language::En => "Selected Backup",
-        }
-    }
-
-    pub fn restore_destination_dir_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Diretório de Destino (digite para alterar)",
-            Language::En => "Destination Directory (type to change)",
-        }
-    }
-
-    pub fn restore_all_files(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Restauração Total (Todos os arquivos do backup)",
-            Language::En => "Full Restore (All backup files)",
         }
     }
 
@@ -379,21 +248,6 @@ impl Translator {
         }
     }
 
-    pub fn btn_start_extraction(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Enter] Iniciar Extração ",
-            Language::En => " [Enter] Start Extraction ",
-        }
-    }
-
-    pub fn btn_cancel(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Esc] Cancelar ",
-            Language::En => " [Esc] Cancel ",
-        }
-    }
-
-    // --- 6. Inspetor de Arquivos ---
     pub fn inspect_title_fmt(&self, name: &str, count: usize) -> String {
         match self.lang {
             Language::Pt => format!(
@@ -407,95 +261,6 @@ impl Translator {
         }
     }
 
-    pub fn col_permissions(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Permissões",
-            Language::En => "Permissions",
-        }
-    }
-
-    pub fn col_size(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Tamanho",
-            Language::En => "Size",
-        }
-    }
-
-    pub fn col_path(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Caminho do Arquivo",
-            Language::En => "File Path",
-        }
-    }
-
-    // --- 7. Políticas de Retenção e Prune Plan ---
-    pub fn prune_policy_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Políticas de Retenção e Limpeza Automática (Borg Prune) ",
-            Language::En => " Automatic Retention & Cleanup Policies (Borg Prune) ",
-        }
-    }
-
-    pub fn prune_keep_last(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Manter últimos N backups (--keep-last):",
-            Language::En => "1. Keep last N backups (--keep-last):",
-        }
-    }
-
-    pub fn prune_keep_daily(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "2. Manter backups diários (--keep-daily):",
-            Language::En => "2. Keep daily backups (--keep-daily):",
-        }
-    }
-
-    pub fn prune_keep_weekly(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "3. Manter backups semanais (--keep-weekly):",
-            Language::En => "3. Keep weekly backups (--keep-weekly):",
-        }
-    }
-
-    pub fn prune_keep_monthly(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "4. Manter backups mensais (--keep-monthly):",
-            Language::En => "4. Keep monthly backups (--keep-monthly):",
-        }
-    }
-
-    pub fn prune_keep_yearly(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "5. Manter backups anuais (--keep-yearly):",
-            Language::En => "5. Keep yearly backups (--keep-yearly):",
-        }
-    }
-
-    pub fn prune_prefix(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "6. Filtrar por Prefixo (--prefix, opcional):",
-            Language::En => "6. Filter by Prefix (--prefix, optional):",
-        }
-    }
-
-    pub fn prune_hint(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
-                "💡 Dica: Deixe vazio para desativar a regra. NENHUM dado será apagado na simulação!"
-            }
-            Language::En => {
-                "💡 Tip: Leave empty to disable rule. NO data will be deleted during simulation!"
-            }
-        }
-    }
-
-    pub fn prune_prompt_button(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [s / Enter] Simular Retenção (Dry-Run)      [Esc] Cancelar ",
-            Language::En => " [s / Enter] Simulate Retention (Dry-Run)      [Esc] Cancel ",
-        }
-    }
-
     pub fn plan_title_fmt(&self, keep: usize, prune: usize) -> String {
         match self.lang {
             Language::Pt => format!(
@@ -503,13 +268,6 @@ impl Translator {
                 keep, prune
             ),
             Language::En => format!(" Cleanup Simulation: {} Keep | {} Delete ", keep, prune),
-        }
-    }
-
-    pub fn plan_total_evaluated_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Total de backups avaliados: ",
-            Language::En => "Total backups evaluated: ",
         }
     }
 
@@ -527,261 +285,10 @@ impl Translator {
         }
     }
 
-    pub fn col_action(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Ação",
-            Language::En => "Action",
-        }
-    }
-
-    pub fn col_date(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Data",
-            Language::En => "Date",
-        }
-    }
-
-    pub fn col_applied_rule(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Regra Aplicada",
-            Language::En => "Applied Rule",
-        }
-    }
-
-    pub fn badge_keep(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[✓ MANTER]",
-            Language::En => "[✓ KEEP]",
-        }
-    }
-
-    pub fn badge_prune(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[✗ ELIMINAR]",
-            Language::En => "[✗ PRUNE]",
-        }
-    }
-
-    pub fn plan_confirm_button(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [y] Confirmar Limpeza e Liberar Espaço com 'compact' ",
-            Language::En => " [y] Confirm Cleanup and Reclaim Space with 'compact' ",
-        }
-    }
-
-    pub fn plan_none_to_prune(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
-                "Todos os backups atendem à sua política de retenção! Nenhum será apagado. [Esc] Voltar"
-            }
-            Language::En => {
-                "All backups meet your retention policy! None will be deleted. [Esc] Back"
-            }
-        }
-    }
-
-    // --- 8. Gerenciador de Repositórios ---
-    pub fn repos_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Gerenciador de Repositórios ",
-            Language::En => " Repository Manager ",
-        }
-    }
-
-    pub fn repos_list_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Repositórios Cadastrados ",
-            Language::En => " Registered Repositories ",
-        }
-    }
-
-    pub fn badge_active(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [ATIVO] ",
-            Language::En => " [ACTIVE] ",
-        }
-    }
-
-    pub fn encrypted_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "🔒 Criptografado",
-            Language::En => "🔒 Encrypted",
-        }
-    }
-
-    pub fn unencrypted_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "🔓 Sem senha",
-            Language::En => "🔓 No passphrase",
-        }
-    }
-
-    pub fn add_repo_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Adicionar Novo Repositório ",
-            Language::En => " Add New Repository ",
-        }
-    }
-
-    pub fn field_repo_name_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Nome Identificador (ex: HD Externo, Servidor Remoto)",
-            Language::En => "1. Identifier Name (e.g., External HD, Remote Server)",
-        }
-    }
-
-    pub fn field_repo_loc_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "2. Localização (ex: /run/media/... ou ssh://user@host/repo)",
-            Language::En => "2. Location (e.g., /run/media/... or ssh://user@host/repo)",
-        }
-    }
-
-    pub fn field_repo_pass_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "3. Senha / Passphrase (Opcional - deixe vazio se não tiver)",
-            Language::En => "3. Passphrase (Optional - leave empty if unencrypted)",
-        }
-    }
-
-    // --- 9. Popups, Exclusão e Telemetria de Carregamento ---
-    pub fn confirm_delete_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Confirmar Exclusão ",
-            Language::En => " Confirm Deletion ",
-        }
-    }
-
-    pub fn confirm_delete_question(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Tem certeza que deseja apagar o backup ",
-            Language::En => "Are you sure you want to delete backup ",
-        }
-    }
-
-    pub fn confirm_delete_warning(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
-                "Esta ação é IRREVERSÍVEL. O borg apagará os dados e executará 'borg compact'."
-            }
-            Language::En => {
-                "This action is IRREVERSIBLE. Borg will delete the data and run 'borg compact'."
-            }
-        }
-    }
-
-    pub fn confirm_delete_btn_yes(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[y] Sim, Apagar Definitivamente",
-            Language::En => "[y] Yes, Delete Permanently",
-        }
-    }
-
-    pub fn confirm_delete_btn_cancel(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[n / Esc] Cancelar",
-            Language::En => "[n / Esc] Cancel",
-        }
-    }
-
     pub fn gauge_activity_fmt(&self, secs: u64) -> String {
         match self.lang {
             Language::Pt => format!("Atividade Borg: {}s", secs),
             Language::En => format!("Borg Activity: {}s", secs),
-        }
-    }
-
-    pub fn telemetry_elapsed(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "⏱️  Tempo decorrido: ",
-            Language::En => "⏱️  Elapsed time: ",
-        }
-    }
-
-    pub fn telemetry_files_count(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "📦  Arquivos processados: ",
-            Language::En => "📦  Files processed: ",
-        }
-    }
-
-    pub fn telemetry_original_size(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "📊  Tamanho Original: ",
-            Language::En => "📊  Original Size: ",
-        }
-    }
-
-    pub fn telemetry_compressed_size(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "  |  Comprimido: ",
-            Language::En => "  |  Compressed: ",
-        }
-    }
-
-    pub fn telemetry_deduplicated_size(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "  |  Deduplicado: ",
-            Language::En => "  |  Deduplicated: ",
-        }
-    }
-
-    pub fn telemetry_current_file(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "📄  Arquivo atual: ",
-            Language::En => "📄  Current file: ",
-        }
-    }
-
-    pub fn telemetry_processing(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Processando dados...",
-            Language::En => "Processing data...",
-        }
-    }
-
-    // --- 10. Validações e Mensagens de Feedback ---
-    pub fn err_name_empty(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "O nome do backup não pode ser vazio!",
-            Language::En => "Backup name cannot be empty!",
-        }
-    }
-
-    pub fn err_name_invalid(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "O nome do backup não pode conter caracteres reservados (/ ou :)!",
-            Language::En => "Backup name cannot contain reserved characters (/ or :)!",
-        }
-    }
-
-    pub fn err_no_files(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => {
-                "Você precisa selecionar pelo menos um arquivo ou pasta para incluir no backup!"
-            }
-            Language::En => "You must select at least one file or folder to include in the backup!",
-        }
-    }
-
-    pub fn err_repo_name_empty(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "O nome do repositório não pode ser vazio!",
-            Language::En => "Repository name cannot be empty!",
-        }
-    }
-
-    pub fn err_repo_loc_empty(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "A localização do repositório não pode ser vazia!",
-            Language::En => "Repository location cannot be empty!",
-        }
-    }
-
-    pub fn err_fuse_unsupported(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Montagem FUSE não é suportada em repositórios remotos",
-            Language::En => "FUSE mount is not supported on remote repositories",
         }
     }
 
@@ -810,13 +317,6 @@ impl Translator {
         match self.lang {
             Language::Pt => format!("Backup '{}' montado com sucesso em '{}'!", name, path),
             Language::En => format!("Backup '{}' successfully mounted at '{}'!", name, path),
-        }
-    }
-
-    pub fn msg_umount_success(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Ponto de montagem desmontado com sucesso!",
-            Language::En => "Mount point successfully unmounted!",
         }
     }
 
@@ -871,136 +371,10 @@ impl Translator {
         }
     }
 
-    pub fn loading_pruning_sim(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Simulando regras de retenção (dry-run)...",
-            Language::En => "Simulating retention rules (dry-run)...",
-        }
-    }
-
-    pub fn loading_pruning_exec(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Executando limpeza e compactação do repositório...",
-            Language::En => "Executing repository prune and compaction...",
-        }
-    }
-    // --- 11. Diagnóstico e Verificação (Borg Check) ---
-    pub fn check_wizard_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Diagnóstico e Verificação de Integridade (Borg Check) ",
-            Language::En => " Integrity Diagnosis & Verification (Borg Check) ",
-        }
-    }
-
-    pub fn check_target_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Alvo da Verificação ([Tab] para alternar)",
-            Language::En => "1. Verification Target ([Tab] to toggle)",
-        }
-    }
-
-    pub fn check_target_entire_repo(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Repositório Completo (Todos os arquivos e índices)",
-            Language::En => "Entire Repository (All archives and indexes)",
-        }
-    }
-
     pub fn check_target_archive_fmt(&self, name: &str) -> String {
         match self.lang {
             Language::Pt => format!("Apenas o backup selecionado: '{}'", name),
             Language::En => format!("Selected backup only: '{}'", name),
-        }
-    }
-
-    pub fn check_mode_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "2. Modo de Diagnóstico ([↑/↓] para navegar)",
-            Language::En => "2. Diagnostic Mode ([↑/↓] to navigate)",
-        }
-    }
-
-    pub fn check_mode_quick(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Rápido (--repository-only): Valida estruturas do repo e índices de chunks",
-            Language::En => "Quick (--repository-only): Validates repo structure and chunk indexes",
-        }
-    }
-
-    pub fn check_mode_standard(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Padrão (Repo + Arquivos): Valida integridade do repo e manifestos dos backups",
-            Language::En => "Standard (Repo + Archives): Validates repo integrity and backup manifests",
-        }
-    }
-
-    pub fn check_mode_verify_data(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Profundo (--verify-data): Descriptografa e valida integridade de TODOS os dados (Mais lento)",
-            Language::En => "Deep (--verify-data): Decrypts and verifies integrity of ALL data chunks (Slower)",
-        }
-    }
-
-    pub fn check_mode_repair(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Reparo (--repair): Tenta reconstruir índices e recuperar dados corrompidos (Avançado)",
-            Language::En => "Repair (--repair): Attempts to rebuild indexes and salvage corrupted data (Advanced)",
-        }
-    }
-
-    pub fn check_start_prompt(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Enter] Iniciar Diagnóstico      [Esc] Cancelar ",
-            Language::En => " [Enter] Start Diagnosis      [Esc] Cancel ",
-        }
-    }
-
-    pub fn check_result_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Relatório de Diagnóstico e Integridade ",
-            Language::En => " Diagnostic & Integrity Report ",
-        }
-    }
-
-    pub fn check_status_healthy(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "🟢 CONSISTENTE: Nenhum problema ou corrupção detectada!",
-            Language::En => "🟢 HEALTHY: No inconsistencies or corruption detected!",
-        }
-    }
-
-    pub fn check_status_warning(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "🟡 AVISOS: Inconsistências leves ou avisos detectados.",
-            Language::En => "🟡 WARNINGS: Minor inconsistencies or warnings detected.",
-        }
-    }
-
-    pub fn check_status_corrupted(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "🔴 ERRO: Corrupção ou inconsistência grave detectada!",
-            Language::En => "🔴 ERROR: Serious corruption or inconsistency detected!",
-        }
-    }
-
-    pub fn check_logs_header(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Logs e Mensagens do Borg (stderr) ",
-            Language::En => " Borg Diagnostic Output (stderr) ",
-        }
-    }
-
-    pub fn footer_check_wizard(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Tab] Alvo | [↑/↓] Modo | [Enter] Executar Diagnóstico | [Esc] Cancelar ",
-            Language::En => " [Tab] Target | [↑/↓] Mode | [Enter] Run Diagnosis | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_check_result(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [j/k/Setas] Rolar Logs | [Esc / Enter] Voltar ",
-            Language::En => " [j/k/Arrows] Scroll Logs | [Esc / Enter] Back ",
         }
     }
 
@@ -1010,47 +384,12 @@ impl Translator {
             Language::En => format!("Checking integrity on '{}'...", target),
         }
     }
-    // --- 12. Comparação de Versões (Borg Diff) ---
-    pub fn diff_wizard_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Comparação entre Backups (Borg Diff) ",
-            Language::En => " Backup Comparison (Borg Diff) ",
-        }
-    }
-
-    pub fn diff_base_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Backup Base (Origem / Mais Antigo)",
-            Language::En => "1. Base Backup (Source / Older)",
-        }
-    }
-
-    pub fn diff_target_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "2. Backup Alvo para Comparação ([↑/↓] para escolher)",
-            Language::En => "2. Target Backup to Compare ([↑/↓] to select)",
-        }
-    }
 
     pub fn diff_option_content_only(&self, active: bool) -> String {
         let check = if active { "[X]" } else { "[ ]" };
         match self.lang {
             Language::Pt => format!("{} [Tab] Comparar apenas conteúdo de arquivos (ignorar metadados/permissões)", check),
             Language::En => format!("{} [Tab] Compare file content only (ignore metadata/permissions)", check),
-        }
-    }
-
-    pub fn diff_start_prompt(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Enter] Comparar Alterações      [Esc] Cancelar ",
-            Language::En => " [Enter] Compare Changes      [Esc] Cancel ",
-        }
-    }
-
-    pub fn diff_view_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Relatório de Alterações (Diff) ",
-            Language::En => " Changes Report (Diff) ",
         }
     }
 
@@ -1067,143 +406,10 @@ impl Translator {
         }
     }
 
-    pub fn diff_col_type(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Tipo",
-            Language::En => "Type",
-        }
-    }
-
-    pub fn diff_col_change(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Variação / Detalhes",
-            Language::En => "Change / Details",
-        }
-    }
-
-    pub fn diff_col_path(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Caminho do Arquivo",
-            Language::En => "File Path",
-        }
-    }
-
-    pub fn diff_badge_added(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[+ NOVO]",
-            Language::En => "[+ ADDED]",
-        }
-    }
-
-    pub fn diff_badge_removed(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[- REMOVIDO]",
-            Language::En => "[- REMOVED]",
-        }
-    }
-
-    pub fn diff_badge_modified(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[~ MODIFICADO]",
-            Language::En => "[~ MODIFIED]",
-        }
-    }
-
-    pub fn diff_badge_metadata(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "[⚙ METADADOS]",
-            Language::En => "[⚙ METADATA]",
-        }
-    }
-
-    pub fn diff_no_changes(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Nenhuma alteração detectada entre estes backups (conteúdo e metadados idênticos).",
-            Language::En => "No changes detected between these backups (content and metadata are identical).",
-        }
-    }
-
-    pub fn diff_err_need_two(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Você precisa de pelo menos 2 backups para realizar uma comparação!",
-            Language::En => "You need at least 2 backups to perform a comparison!",
-        }
-    }
-
-    pub fn footer_diff_wizard(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [↑/↓] Selecionar Alvo | [Tab] Conteúdo apenas | [Enter] Comparar | [Esc] Cancelar ",
-            Language::En => " [↑/↓] Select Target | [Tab] Content only | [Enter] Compare | [Esc] Cancel ",
-        }
-    }
-
-    pub fn footer_diff_view(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [j/k/Setas] Navegar Alterações | [Esc / Enter] Voltar ",
-            Language::En => " [j/k/Arrows] Navigate Changes | [Esc / Enter] Back ",
-        }
-    }
-
     pub fn loading_diffing_fmt(&self, a1: &str, a2: &str) -> String {
         match self.lang {
             Language::Pt => format!("Comparando '{}' com '{}'...", a1, a2),
             Language::En => format!("Comparing '{}' with '{}'...", a1, a2),
-        }
-    }
-    // --- 13. Perfis e Automação de Backup ---
-    pub fn profiles_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Conjuntos e Perfis de Backup Automático ",
-            Language::En => " Automated Backup Sets & Profiles ",
-        }
-    }
-
-    pub fn profiles_empty(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Nenhum conjunto cadastrado ainda. Pressione [a] para criar seu primeiro perfil de backup!",
-            Language::En => "No backup profiles registered yet. Press [a] to create your first backup profile!",
-        }
-    }
-
-    pub fn profile_details_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Detalhes do Perfil Selecionado ",
-            Language::En => " Selected Profile Details ",
-        }
-    }
-
-    pub fn profile_wizard_title(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " Criar Novo Conjunto de Backup ",
-            Language::En => " Create New Backup Profile ",
-        }
-    }
-
-    pub fn profile_name_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "1. Nome do Conjunto (ex: BACKUP_DIARIO, FOTOS):",
-            Language::En => "1. Profile Name (e.g. BACKUP_DIARIO, PHOTOS):",
-        }
-    }
-
-    pub fn profile_compression_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "2. Algoritmo de Compressão ([←/→] para alternar):",
-            Language::En => "2. Compression Algorithm ([←/→] to switch):",
-        }
-    }
-
-    pub fn profile_schedule_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "3. Agendamento Frequência ([←/→] para alternar):",
-            Language::En => "3. Schedule Frequency ([←/→] to switch):",
-        }
-    }
-
-    pub fn profile_paths_label(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "4. Selecionar Pastas e Arquivos ([Espaço] inclui / [e] exclui):",
-            Language::En => "4. Select Folders & Files ([Space] include / [e] exclude):",
         }
     }
 
@@ -1214,20 +420,8 @@ impl Translator {
         }
     }
 
-    pub fn automation_installed_msg(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => "Arquivos Systemd criados com sucesso em ~/.config/systemd/user/!",
-            Language::En => "Systemd files successfully created in ~/.config/systemd/user/!",
-        }
-    }
-
-    pub fn profile_save_prompt(&self) -> &'static str {
-        match self.lang {
-            Language::Pt => " [Ctrl+S] Salvar Perfil      [Esc] Cancelar ",
-            Language::En => " [Ctrl+S] Save Profile      [Esc] Cancel ",
-        }
-    }
 }
+
 
 #[cfg(test)]
 mod tests {
