@@ -131,6 +131,12 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         }
         AppState::CreatingProfile(_) => profiles::handle_creating_profile(app, key),
         AppState::AutomationView(_) => profiles::handle_automation_view(app, key),
+        AppState::HelpModal => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') | KeyCode::Enter => {
+                app.state = AppState::Browsing;
+            }
+            _ => {}
+        },
         AppState::Initializing => {}
     }
 }

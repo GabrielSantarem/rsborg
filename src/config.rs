@@ -181,6 +181,10 @@ impl BackupProfile {
     }
 }
 
+fn default_theme() -> String {
+    "rust".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub active_repo_id: String,
@@ -188,6 +192,8 @@ pub struct AppConfig {
     pub repositories: Vec<RepositoryConfig>,
     #[serde(default)]
     pub profiles: Vec<BackupProfile>,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 impl Default for AppConfig {
@@ -206,6 +212,7 @@ impl Default for AppConfig {
             language: "pt".to_string(),
             repositories: vec![default_repo],
             profiles: Vec::new(),
+            theme: "rust".to_string(),
         }
     }
 }

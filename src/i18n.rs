@@ -64,6 +64,7 @@ impl Translator {
     }
 
     // --- 2. Rodapés de Atalho (Footers) ---
+    #[allow(dead_code)]
     pub fn footer_main(&self) -> &'static str {
         match self.lang {
             Language::Pt => {
@@ -212,6 +213,7 @@ impl Translator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn fuse_mounted_fmt(&self, path: &str) -> String {
         match self.lang {
             Language::Pt => format!("Sim (em {})", path),
@@ -219,6 +221,7 @@ impl Translator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn fuse_not_mounted(&self) -> &'static str {
         match self.lang {
             Language::Pt => "Não montado",
@@ -226,6 +229,7 @@ impl Translator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn metadata_content_fmt(
         &self,
         id: &str,

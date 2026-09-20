@@ -1,3 +1,4 @@
+use crate::ui::theme::{Theme, ThemeMode};
 use ratatui::widgets::TableState;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -35,6 +36,7 @@ pub struct App {
     pub table_state: TableState,
     pub should_quit: bool,
     pub t: Translator,
+    pub theme: Theme,
 
     // Criação de backup
     pub create_focus: CreateFocus,
@@ -69,6 +71,13 @@ impl App {
             Language::Pt
         };
 
+        let theme_mode = if config.theme.eq_ignore_ascii_case("catppuccin") {
+            ThemeMode::Catppuccin
+        } else {
+            ThemeMode::Rust
+        };
+        let theme = Theme::new(theme_mode);
+
         Self {
             state: AppState::Initializing,
             config,
@@ -79,6 +88,7 @@ impl App {
             table_state: TableState::default(),
             should_quit: false,
             t: Translator::new(lang),
+            theme,
 
             create_focus: CreateFocus::Name,
             new_backup_name: String::new(),
@@ -115,6 +125,16 @@ impl App {
         };
         self.t = Translator::new(new_lang);
         self.config.language = code.to_string();
+        let _ = config::save_config(&self.config);
+    }
+
+    pub fn toggle_theme(&mut self) {
+        let new_mode = self.theme.mode.toggle();
+        self.config.theme = match new_mode {
+            ThemeMode::Rust => "rust".to_string(),
+            ThemeMode::Catppuccin => "catppuccin".to_string(),
+        };
+        self.theme = Theme::new(new_mode);
         let _ = config::save_config(&self.config);
     }
 

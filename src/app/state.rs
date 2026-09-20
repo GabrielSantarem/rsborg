@@ -154,6 +154,7 @@ pub enum AppState {
     ManagingProfiles { selected_index: usize },
     CreatingProfile(ProfileWizardState),
     AutomationView(AutomationViewState),
+    HelpModal,
 }
 
 #[derive(Debug, PartialEq)]

@@ -233,3 +233,45 @@ fn test_prune_policy_state_conversion() {
     let converted_back = state.to_policy();
     assert_eq!(policy, converted_back);
 }
+
+#[test]
+fn test_theme_toggle() {
+    use crate::ui::theme::ThemeMode;
+
+    let mut app = App::new();
+    let initial_mode = app.theme.mode;
+    app.toggle_theme();
+    assert_ne!(app.theme.mode, initial_mode);
+    match app.theme.mode {
+        ThemeMode::Rust => assert_eq!(app.config.theme, "rust"),
+        ThemeMode::Catppuccin => assert_eq!(app.config.theme, "catppuccin"),
+    }
+    app.toggle_theme();
+    assert_eq!(app.theme.mode, initial_mode);
+}
+
+#[test]
+fn test_help_modal_navigation() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    let key_question = KeyEvent {
+        code: KeyCode::Char('?'),
+        modifiers: KeyModifiers::NONE,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    };
+    crate::events::handle_key_event(&mut app, key_question);
+    assert_eq!(app.state, AppState::HelpModal);
+
+    let key_esc = KeyEvent {
+        code: KeyCode::Esc,
+        modifiers: KeyModifiers::NONE,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    };
+    crate::events::handle_key_event(&mut app, key_esc);
+    assert_eq!(app.state, AppState::Browsing);
+}
