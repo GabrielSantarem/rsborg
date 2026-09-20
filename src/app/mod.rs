@@ -118,6 +118,36 @@ impl App {
         let _ = config::save_config(&self.config);
     }
 
+    pub fn set_language(&mut self, lang_code: &str) {
+        let lang = if lang_code.eq_ignore_ascii_case("en") {
+            Language::En
+        } else {
+            Language::Pt
+        };
+        self.t = Translator::new(lang);
+    }
+
+    pub fn override_repo_path(&mut self, path: &str) {
+        if let Some(existing) = self.config.repositories.iter().find(|r| r.location == path) {
+            self.config.active_repo_id = existing.id.clone();
+        } else {
+            let id = format!("cli-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "CLI Repo".to_string());
+            let repo = config::RepositoryConfig {
+                id: id.clone(),
+                name,
+                location: path.to_string(),
+                passphrase: None,
+                prune_policy: Some(config::PrunePolicy::default()),
+            };
+            self.config.repositories.push(repo);
+            self.config.active_repo_id = id;
+        }
+    }
+
     pub fn on_start(&mut self) {
         if let Err(e) = checker::check_instances() {
             self.state = AppState::InitError(e);
