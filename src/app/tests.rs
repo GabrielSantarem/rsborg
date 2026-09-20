@@ -299,3 +299,21 @@ fn test_handle_done_delete_shows_success_popup() {
         _ => panic!("Esperava SuccessPopup após DoneDelete"),
     }
 }
+
+#[test]
+fn test_cancel_active_task() {
+    use std::sync::atomic::Ordering;
+
+    let mut app = App::new();
+    app.state = AppState::Loading;
+    app.active_child_pid.store(999999, Ordering::SeqCst);
+
+    let _ = app.tx.send(ThreadStatus::DoneCreate);
+
+    app.cancel_active_task();
+
+    assert_eq!(app.state, AppState::Browsing);
+    assert!(app.is_task_cancelled.load(Ordering::SeqCst));
+    assert_eq!(app.active_child_pid.load(Ordering::SeqCst), 0);
+    assert!(app.rx.try_recv().is_err());
+}

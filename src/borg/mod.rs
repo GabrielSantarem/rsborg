@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 pub mod errors;
 pub mod models;
 pub mod parser;
@@ -18,14 +20,36 @@ use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+#[derive(Clone, Default)]
 pub struct BorgManager {
     bin_path: String,
+    active_pid: Option<Arc<AtomicU32>>,
 }
 
 impl BorgManager {
     pub fn new() -> Self {
         Self {
             bin_path: "borg".to_string(),
+            active_pid: None,
+        }
+    }
+
+    pub fn with_cancellation(active_pid: Arc<AtomicU32>) -> Self {
+        Self {
+            bin_path: "borg".to_string(),
+            active_pid: Some(active_pid),
+        }
+    }
+
+    fn register_child_pid(&self, pid: u32) {
+        if let Some(ref holder) = self.active_pid {
+            holder.store(pid, Ordering::SeqCst);
+        }
+    }
+
+    fn unregister_child_pid(&self) {
+        if let Some(ref holder) = self.active_pid {
+            holder.store(0, Ordering::SeqCst);
         }
     }
 
@@ -46,11 +70,23 @@ impl BorgManager {
         let start = std::time::Instant::now();
         crate::log_info!("[borg] Executing command: {:?}", cmd);
 
-        let output = cmd.output().map_err(|e| {
+        let child = cmd.spawn().map_err(|e| {
+            let err_msg = format!("Falha ao iniciar {}: {}", desc, e);
+            crate::log_error!("[borg] IO error starting '{}': {}", desc, e);
+            BorgError::IoError(err_msg).to_string()
+        })?;
+
+        let pid = child.id();
+        self.register_child_pid(pid);
+
+        let output = child.wait_with_output().map_err(|e| {
+            self.unregister_child_pid();
             let err_msg = format!("Falha ao executar {}: {}", desc, e);
             crate::log_error!("[borg] IO error during '{}': {}", desc, e);
             BorgError::IoError(err_msg).to_string()
         })?;
+
+        self.unregister_child_pid();
 
         let duration = start.elapsed();
         let code = output.status.code();
@@ -214,6 +250,7 @@ impl BorgManager {
             crate::log_error!("[borg] Failed to spawn borg create: {}", e);
             BorgError::IoError(format!("Falha ao iniciar borg create: {}", e)).to_string()
         })?;
+        self.register_child_pid(child.id());
 
         let mut stderr = child.stderr.take().ok_or_else(|| {
             BorgError::IoError("Falha ao capturar stderr do processo".to_string()).to_string()
@@ -244,8 +281,10 @@ impl BorgManager {
         }
 
         let status = child.wait().map_err(|e| {
+            self.unregister_child_pid();
             BorgError::IoError(format!("Erro ao aguardar processo: {}", e)).to_string()
         })?;
+        self.unregister_child_pid();
 
         if !status.success() {
             crate::log_error!("[borg] borg create failed (code: {:?}):\n{}", status.code(), all_stderr.trim());
@@ -370,6 +409,7 @@ impl BorgManager {
             crate::log_error!("[borg] Failed to spawn borg extract: {}", e);
             BorgError::IoError(format!("Falha ao iniciar borg extract: {}", e)).to_string()
         })?;
+        self.register_child_pid(child.id());
 
         if let Some(stdout) = child.stdout.take() {
             use std::io::BufRead;
@@ -380,8 +420,10 @@ impl BorgManager {
         }
 
         let status = child.wait().map_err(|e| {
+            self.unregister_child_pid();
             BorgError::IoError(format!("Erro ao aguardar processo de extração: {}", e)).to_string()
         })?;
+        self.unregister_child_pid();
 
         if !status.success() {
             let mut err_msg = String::new();
@@ -562,6 +604,7 @@ impl BorgManager {
         let mut child = cmd.spawn().map_err(|e| {
             BorgError::IoError(format!("Falha ao iniciar processo borg check: {}", e)).to_string()
         })?;
+        self.register_child_pid(child.id());
 
         let mut log_output = Vec::new();
 
@@ -575,8 +618,10 @@ impl BorgManager {
         }
 
         let status = child.wait().map_err(|e| {
+            self.unregister_child_pid();
             BorgError::IoError(format!("Erro ao aguardar término do borg check: {}", e)).to_string()
         })?;
+        self.unregister_child_pid();
 
         let exit_code = status.code().unwrap_or(2);
         let success = exit_code == 0;
@@ -647,6 +692,7 @@ impl BorgManager {
         let mut child = cmd.spawn().map_err(|e| {
             BorgError::IoError(format!("Falha ao iniciar processo borg diff: {}", e)).to_string()
         })?;
+        self.register_child_pid(child.id());
 
         let mut entries = Vec::new();
 
@@ -666,8 +712,10 @@ impl BorgManager {
         }
 
         let status = child.wait().map_err(|e| {
+            self.unregister_child_pid();
             BorgError::IoError(format!("Erro ao aguardar processo borg diff: {}", e)).to_string()
         })?;
+        self.unregister_child_pid();
 
         if !status.success() {
             let mut err_msg = String::new();

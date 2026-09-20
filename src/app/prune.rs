@@ -49,14 +49,20 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
             let pol_clone = policy.clone();
 
             thread::spawn(move || {
                 let res =
                     manager.prune_repository(&repo_path, &pol_clone, true, passphrase.as_deref());
-                let _ = tx.send(ThreadStatus::DonePruneDryRun(res, pol_clone));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = tx.send(ThreadStatus::DonePruneDryRun(res, pol_clone));
+                } else {
+                    crate::log_info!("simulate_prune thread terminated after cancellation; discarding result");
+                }
             });
         }
     }
@@ -85,19 +91,25 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
 
             thread::spawn(move || {
                 let res =
                     manager.prune_repository(&repo_path, &policy, false, passphrase.as_deref());
-                match res {
-                    Ok(_) => {
-                        let _ = tx.send(ThreadStatus::DonePruneExecute(Ok(to_prune_count)));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    match res {
+                        Ok(_) => {
+                            let _ = tx.send(ThreadStatus::DonePruneExecute(Ok(to_prune_count)));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(ThreadStatus::DonePruneExecute(Err(e)));
+                        }
                     }
-                    Err(e) => {
-                        let _ = tx.send(ThreadStatus::DonePruneExecute(Err(e)));
-                    }
+                } else {
+                    crate::log_info!("execute_prune thread terminated after cancellation; discarding result");
                 }
             });
         }

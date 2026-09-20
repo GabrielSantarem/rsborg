@@ -58,7 +58,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         }
         AppState::Loading => match key.code {
             KeyCode::Char('q') | KeyCode::Esc => {
-                app.state = AppState::Browsing;
+                app.cancel_active_task();
             }
             _ => {}
         },

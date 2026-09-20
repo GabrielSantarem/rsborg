@@ -133,11 +133,14 @@ impl App {
         self.loading_start = Some(Instant::now());
         self.state = AppState::Loading;
 
+        self.reset_cancellation_flags();
         let tx = self.tx.clone();
-        let manager = BorgManager::new();
+        let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+        let is_cancelled = self.is_task_cancelled.clone();
 
         thread::spawn(move || {
             let tx_prog = tx.clone();
+            let is_canc_prog = is_cancelled.clone();
             let res = manager.create_backup_with_progress(
                 &repo_path,
                 &name,
@@ -146,17 +149,23 @@ impl App {
                 Some(&compression),
                 passphrase.as_deref(),
                 move |p| {
-                    let _ = tx_prog.send(ThreadStatus::Progress(p));
+                    if !is_canc_prog.load(std::sync::atomic::Ordering::SeqCst) {
+                        let _ = tx_prog.send(ThreadStatus::Progress(p));
+                    }
                 },
             );
 
-            match res {
-                Ok(_) => {
-                    let _ = tx.send(ThreadStatus::DoneCreate);
+            if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                match res {
+                    Ok(_) => {
+                        let _ = tx.send(ThreadStatus::DoneCreate);
+                    }
+                    Err(e) => {
+                        let _ = tx.send(ThreadStatus::Error(e));
+                    }
                 }
-                Err(e) => {
-                    let _ = tx.send(ThreadStatus::Error(e));
-                }
+            } else {
+                crate::log_info!("run_profile_backup thread terminated after cancellation; discarding result");
             }
         });
     }

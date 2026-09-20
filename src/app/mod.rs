@@ -59,6 +59,9 @@ pub struct App {
 
     pub tx: Sender<ThreadStatus>,
     pub rx: Receiver<ThreadStatus>,
+
+    pub active_child_pid: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    pub is_task_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl App {
@@ -107,7 +110,39 @@ impl App {
 
             tx,
             rx,
+
+            active_child_pid: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            is_task_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    pub fn reset_cancellation_flags(&self) {
+        self.active_child_pid.store(0, std::sync::atomic::Ordering::SeqCst);
+        self.is_task_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn cancel_active_task(&mut self) {
+        self.is_task_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+        let pid = self.active_child_pid.swap(0, std::sync::atomic::Ordering::SeqCst);
+
+        if pid > 0 {
+            crate::log_warn!("User requested task cancellation. Terminating Borg PID {}", pid);
+            let _ = std::process::Command::new("kill")
+                .args(["-15", &pid.to_string()])
+                .output();
+
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let _ = std::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
+        } else {
+            crate::log_info!("Cancellation requested; no active child process was running.");
+        }
+
+        while self.rx.try_recv().is_ok() {}
+
+        self.loading_start = None;
+        self.state = AppState::Browsing;
     }
 
     pub fn get_active_repo(&self) -> Option<&RepositoryConfig> {

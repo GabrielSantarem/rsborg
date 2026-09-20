@@ -36,22 +36,29 @@ impl App {
         self.loading_start = Some(Instant::now());
         self.state = AppState::Loading;
 
+        self.reset_cancellation_flags();
         let tx = self.tx.clone();
-        let manager = BorgManager::new();
+        let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+        let is_cancelled = self.is_task_cancelled.clone();
         let deleted_name = archive_name.clone();
 
         crate::log_info!("Initiating delete for archive '{}' in repo '{}'", archive_name, repo_path);
 
         thread::spawn(move || {
-            match manager.delete_archive(&repo_path, &archive_name, passphrase.as_deref()) {
-                Ok(_) => {
-                    crate::log_info!("Archive '{}' successfully deleted", deleted_name);
-                    let _ = tx.send(ThreadStatus::DoneDelete(deleted_name));
+            let res = manager.delete_archive(&repo_path, &archive_name, passphrase.as_deref());
+            if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                match res {
+                    Ok(_) => {
+                        crate::log_info!("Archive '{}' successfully deleted", deleted_name);
+                        let _ = tx.send(ThreadStatus::DoneDelete(deleted_name));
+                    }
+                    Err(e) => {
+                        crate::log_error!("Failed to delete archive '{}': {}", archive_name, e);
+                        let _ = tx.send(ThreadStatus::Error(e));
+                    }
                 }
-                Err(e) => {
-                    crate::log_error!("Failed to delete archive '{}': {}", archive_name, e);
-                    let _ = tx.send(ThreadStatus::Error(e));
-                }
+            } else {
+                crate::log_info!("delete_archive thread terminated after cancellation; discarding result");
             }
         });
     }
@@ -85,12 +92,18 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
 
             thread::spawn(move || {
                 let res = manager.list_archive_contents(&repo_path, &name, passphrase.as_deref());
-                let _ = tx.send(ThreadStatus::DoneInspect(res, name));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = tx.send(ThreadStatus::DoneInspect(res, name));
+                } else {
+                    crate::log_info!("inspect thread terminated after cancellation; discarding result");
+                }
             });
         }
     }
@@ -162,12 +175,15 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
             let dest_clone = dest_path.clone();
 
             thread::spawn(move || {
                 let tx_prog = tx.clone();
+                let is_canc_prog = is_cancelled.clone();
                 let mut count = 0;
                 let res = manager.extract_archive(
                     &repo_path,
@@ -176,25 +192,31 @@ impl App {
                     &paths,
                     passphrase.as_deref(),
                     move |extracted_file| {
-                        count += 1;
-                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
-                            raw_line: format!("Extraindo {}", extracted_file),
-                            files_count: format!("{}", count),
-                            current_file: extracted_file,
-                            ..Default::default()
-                        }));
+                        if !is_canc_prog.load(std::sync::atomic::Ordering::SeqCst) {
+                            count += 1;
+                            let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                                raw_line: format!("Extraindo {}", extracted_file),
+                                files_count: format!("{}", count),
+                                current_file: extracted_file,
+                                ..Default::default()
+                            }));
+                        }
                     },
                 );
 
-                match res {
-                    Ok(_) => {
-                        let _ = tx.send(ThreadStatus::DoneRestore(
-                            dest_clone.to_string_lossy().to_string(),
-                        ));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    match res {
+                        Ok(_) => {
+                            let _ = tx.send(ThreadStatus::DoneRestore(
+                                dest_clone.to_string_lossy().to_string(),
+                            ));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(ThreadStatus::Error(e));
+                        }
                     }
-                    Err(e) => {
-                        let _ = tx.send(ThreadStatus::Error(e));
-                    }
+                } else {
+                    crate::log_info!("extract_archive thread terminated after cancellation; discarding result");
                 }
             });
         }

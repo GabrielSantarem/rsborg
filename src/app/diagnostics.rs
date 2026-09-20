@@ -61,28 +61,37 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
             let t_disp = target_display.clone();
             let m_disp = mode_display.clone();
 
             thread::spawn(move || {
                 let tx_prog = tx.clone();
+                let is_canc_prog = is_cancelled.clone();
                 let res = manager.check_repository(
                     &repo_path,
                     archive_target.as_deref(),
                     mode,
                     passphrase.as_deref(),
                     move |line| {
-                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
-                            current_file: line.clone(),
-                            raw_line: line,
-                            ..Default::default()
-                        }));
+                        if !is_canc_prog.load(std::sync::atomic::Ordering::SeqCst) {
+                            let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                                current_file: line.clone(),
+                                raw_line: line,
+                                ..Default::default()
+                            }));
+                        }
                     },
                 );
 
-                let _ = tx.send(ThreadStatus::DoneCheck(res, t_disp, m_disp));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = tx.send(ThreadStatus::DoneCheck(res, t_disp, m_disp));
+                } else {
+                    crate::log_info!("check_repository thread terminated after cancellation; discarding result");
+                }
             });
         }
     }
@@ -153,13 +162,16 @@ impl App {
             self.loading_start = Some(Instant::now());
             self.state = AppState::Loading;
 
+            self.reset_cancellation_flags();
             let tx = self.tx.clone();
-            let manager = BorgManager::new();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
             let b_clone = base.clone();
             let t_clone = target.clone();
 
             thread::spawn(move || {
                 let tx_prog = tx.clone();
+                let is_canc_prog = is_cancelled.clone();
                 let res = manager.diff_archives(
                     &repo_path,
                     &base,
@@ -167,15 +179,21 @@ impl App {
                     content_only,
                     passphrase.as_deref(),
                     move |line| {
-                        let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
-                            current_file: line.clone(),
-                            raw_line: line,
-                            ..Default::default()
-                        }));
+                        if !is_canc_prog.load(std::sync::atomic::Ordering::SeqCst) {
+                            let _ = tx_prog.send(ThreadStatus::Progress(BackupProgress {
+                                current_file: line.clone(),
+                                raw_line: line,
+                                ..Default::default()
+                            }));
+                        }
                     },
                 );
 
-                let _ = tx.send(ThreadStatus::DoneDiff(res, b_clone, t_clone));
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = tx.send(ThreadStatus::DoneDiff(res, b_clone, t_clone));
+                } else {
+                    crate::log_info!("diff_archives thread terminated after cancellation; discarding result");
+                }
             });
         }
     }
