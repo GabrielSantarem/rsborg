@@ -227,3 +227,44 @@ fn test_log_viewer_clear_and_reload() {
     handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('q')));
     assert_eq!(app.state, AppState::Browsing);
 }
+
+#[test]
+fn test_settings_navigation_and_actions() {
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    // 's' opens Settings modal
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('s')));
+    assert_eq!(app.state, AppState::Settings(crate::app::state::SettingsState { selected_index: 0 }));
+
+    // Item 0 is Language: Enter toggles language
+    let initial_lang = app.t.lang;
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Enter));
+    assert_ne!(app.t.lang, initial_lang);
+
+    // Down moves to Item 1 (Theme)
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    if let AppState::Settings(ref state) = app.state {
+        assert_eq!(state.selected_index, 1);
+    }
+
+    // Enter toggles theme
+    let initial_theme = app.theme.mode;
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Enter));
+    assert_ne!(app.theme.mode, initial_theme);
+
+    // Down moves to Item 2 (Repositories)
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Down));
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Enter));
+    assert_eq!(app.state, AppState::ManagingRepos);
+
+    // Esc from repos returns to Browsing
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+
+    // 's' re-opens settings
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('s')));
+    // 'q' or 's' or 'Esc' closes settings
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('s')));
+    assert_eq!(app.state, AppState::Browsing);
+}

@@ -262,6 +262,16 @@ impl Translator {
         logs_empty => (pt: "Nenhum registro de log encontrado para este filtro.", en: "No log records found for this filter."),
         logs_footer => (pt: " [1-4] Filtros | [j/k/Setas] Rolar | [g/G] Topo/Fim | [c] Limpar | [r] Recarregar | [Esc] Fechar ", en: " [1-4] Filters | [j/k/Arrows] Scroll | [g/G] Top/End | [c] Clear | [r] Reload | [Esc] Close "),
         help_act_logs => (pt: "Visualizar Logs do Sistema e Depuração (rsborg.log)", en: "View System and Debugging Logs (rsborg.log)"),
+        settings_title => (pt: " CONFIGURAÇÕES & PREFERÊNCIAS ", en: " SETTINGS & PREFERENCES "),
+        settings_item_lang => (pt: "Idioma da Interface", en: "UI Language"),
+        settings_item_theme => (pt: "Tema Visual", en: "Visual Theme"),
+        settings_item_repos => (pt: "Gerenciar Repositórios", en: "Manage Repositories"),
+        settings_item_logs => (pt: "Visualizador de Logs", en: "System Logs Viewer"),
+        settings_item_restore => (pt: "Pasta Padrão de Restauração", en: "Default Restore Folder"),
+        settings_item_core => (pt: "Motor BorgBackup", en: "BorgBackup Engine"),
+        settings_footer => (pt: " [j/k/Setas] Navegar | [Enter/Espaço] Alternar/Abrir | [Esc] Fechar ", en: " [j/k/Arrows] Navigate | [Enter/Space] Toggle/Open | [Esc] Close "),
+        footer_settings => (pt: "Configurações", en: "Settings"),
+        help_nav_settings => (pt: "Abrir Central de Configurações (Idioma, Tema, Repositórios, Logs)", en: "Open Settings Center (Language, Theme, Repos, Logs)"),
     }
 
     // --- Métodos Dinâmicos com Formatação (Parâmetros) ---

@@ -241,6 +241,12 @@ pub enum AppState {
     AutomationView(AutomationViewState),
     HelpModal,
     LogViewer(LogViewerState),
+    Settings(SettingsState),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SettingsState {
+    pub selected_index: usize,
 }
 
 #[derive(Debug, PartialEq)]

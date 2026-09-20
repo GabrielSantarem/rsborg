@@ -121,6 +121,10 @@ impl App {
         self.is_task_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
+    pub fn open_settings(&mut self) {
+        self.state = AppState::Settings(crate::app::state::SettingsState::default());
+    }
+
     pub fn open_log_viewer(&mut self) {
         let lines = crate::logger::read_log_entries();
         self.state = AppState::LogViewer(crate::app::state::LogViewerState::new(lines));
