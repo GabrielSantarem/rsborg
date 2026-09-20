@@ -4,6 +4,7 @@ pub mod dialogs;
 pub mod profiles;
 pub mod prune;
 pub mod repos;
+pub mod logs;
 
 #[cfg(test)]
 mod tests;
@@ -163,6 +164,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
             }
             _ => {}
         },
+        AppState::LogViewer(_) => logs::handle_log_viewer(app, key),
         AppState::Initializing => {}
     }
 }

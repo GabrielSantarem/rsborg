@@ -72,6 +72,26 @@ macro_rules! log_error {
     };
 }
 
+pub fn read_log_entries() -> Vec<String> {
+    let log_path = crate::config::get_rsborg_dir().join("rsborg.log");
+    if let Ok(content) = fs::read_to_string(&log_path) {
+        content.lines().map(|s| s.to_string()).collect()
+    } else {
+        Vec::new()
+    }
+}
+
+pub fn clear_log_file() -> Result<(), String> {
+    let log_path = crate::config::get_rsborg_dir().join("rsborg.log");
+    if let Ok(mut f) = fs::File::create(&log_path) {
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        let _ = writeln!(f, "[{}] [INFO] === Logs limpos pelo usuário via RsBorg ===", now);
+        Ok(())
+    } else {
+        Err("Não foi possível limpar o arquivo de log".to_string())
+    }
+}
+
 #[macro_export]
 macro_rules! log_debug {
     ($($arg:tt)*) => {

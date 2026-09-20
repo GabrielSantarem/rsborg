@@ -254,6 +254,14 @@ impl Translator {
         help_close_hint => (pt: "  [ Pressione Esc, q ou ? para fechar este menu de ajuda ]", en: "  [ Press Esc, q or ? to close this help menu ]"),
         btn_break_lock => (pt: "Destravar Repositório (break-lock)", en: "Break Repository Lock (break-lock)"),
         msg_break_lock_success => (pt: "Trava do repositório liberada com sucesso (break-lock)!", en: "Repository lock released successfully (break-lock)!"),
+        logs_title => (pt: " REGISTRO DE LOGS E OPERAÇÕES (RSBORG.LOG) ", en: " OPERATION LOGS & DEBUG (RSBORG.LOG) "),
+        logs_filter_all => (pt: "Todos", en: "All"),
+        logs_filter_info => (pt: "Info", en: "Info"),
+        logs_filter_warn => (pt: "Avisos", en: "Warnings"),
+        logs_filter_error => (pt: "Erros", en: "Errors"),
+        logs_empty => (pt: "Nenhum registro de log encontrado para este filtro.", en: "No log records found for this filter."),
+        logs_footer => (pt: " [1-4] Filtros | [j/k/Setas] Rolar | [g/G] Topo/Fim | [c] Limpar | [r] Recarregar | [Esc] Fechar ", en: " [1-4] Filters | [j/k/Arrows] Scroll | [g/G] Top/End | [c] Clear | [r] Reload | [Esc] Close "),
+        help_act_logs => (pt: "Visualizar Logs do Sistema e Depuração (rsborg.log)", en: "View System and Debugging Logs (rsborg.log)"),
     }
 
     // --- Métodos Dinâmicos com Formatação (Parâmetros) ---

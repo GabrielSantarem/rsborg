@@ -246,8 +246,12 @@ pub fn render_help_modal(f: &mut Frame, app: &App, screen_area: Rect) {
             Span::styled(app.t.help_nav_theme(), desc_style),
         ]),
         Line::from(vec![
-            Span::styled("    [l] ou [L]        ", key_style),
+            Span::styled("    [l]               ", key_style),
             Span::styled(app.t.help_nav_lang(), desc_style),
+        ]),
+        Line::from(vec![
+            Span::styled("    [L] ou [o]        ", key_style),
+            Span::styled(app.t.help_act_logs(), desc_style),
         ]),
         Line::from(""),
         Line::from(Span::styled(app.t.help_sec_actions(), sec_style)),

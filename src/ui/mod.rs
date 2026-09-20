@@ -16,6 +16,7 @@ pub mod profiles;
 pub mod prune;
 pub mod repos;
 pub mod restore;
+pub mod logs;
 pub mod theme;
 
 use crate::app::{App, AppState};
@@ -207,6 +208,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if app.state == AppState::HelpModal {
         popups::render_help_modal(f, app, size);
     }
+
+    if let AppState::LogViewer(ref state) = app.state {
+        logs::render_log_viewer(f, app, state, size);
+    }
 }
 
 fn render_styled_footer<'a>(app: &'a App) -> Line<'a> {
@@ -248,11 +253,36 @@ fn render_styled_footer<'a>(app: &'a App) -> Line<'a> {
                 Span::styled(" [l] ", key_style),
                 Span::styled(if is_pt { "Idioma" } else { "Language" }, desc_style),
                 sep.clone(),
+                Span::styled(" [L] ", key_style),
+                Span::styled("Logs", desc_style),
+                sep.clone(),
                 Span::styled(" [?] ", key_style),
                 Span::styled(if is_pt { "Ajuda" } else { "Help" }, desc_style),
                 sep,
                 Span::styled(" [q] ", key_style),
                 Span::styled(if is_pt { "Sair" } else { "Quit" }, desc_style),
+            ])
+        }
+        AppState::LogViewer(_) => {
+            let is_pt = app.t.lang == crate::i18n::Language::Pt;
+            Line::from(vec![
+                Span::styled(" [1-4] ", key_style),
+                Span::styled(if is_pt { "Filtros" } else { "Filters" }, desc_style),
+                sep.clone(),
+                Span::styled(" [j/k] ", key_style),
+                Span::styled(if is_pt { "Rolar" } else { "Scroll" }, desc_style),
+                sep.clone(),
+                Span::styled(" [g/G] ", key_style),
+                Span::styled(if is_pt { "Topo/Fim" } else { "Top/End" }, desc_style),
+                sep.clone(),
+                Span::styled(" [c] ", key_style),
+                Span::styled(if is_pt { "Limpar" } else { "Clear" }, desc_style),
+                sep.clone(),
+                Span::styled(" [r] ", key_style),
+                Span::styled(if is_pt { "Recarregar" } else { "Reload" }, desc_style),
+                sep,
+                Span::styled(" [Esc] ", key_style),
+                Span::styled(if is_pt { "Fechar" } else { "Close" }, desc_style),
             ])
         }
         AppState::HelpModal => {

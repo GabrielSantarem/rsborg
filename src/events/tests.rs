@@ -164,3 +164,66 @@ fn test_diff_view_navigation() {
     handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('q')));
     assert_eq!(app.state, AppState::Browsing);
 }
+
+#[test]
+fn test_log_viewer_navigation_and_filters() {
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    // 'L' opens log viewer
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('L')));
+    assert!(matches!(app.state, AppState::LogViewer(_)));
+
+    if let AppState::LogViewer(ref mut state) = app.state {
+        state.all_lines = vec![
+            "[2026-09-19 22:00:00.000] [INFO] Info 1".to_string(),
+            "[2026-09-19 22:00:01.000] [WARN] Warn 1".to_string(),
+            "[2026-09-19 22:00:02.000] [ERROR] Error 1".to_string(),
+        ];
+    }
+
+    // Key '2' sets filter to Info
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('2')));
+    if let AppState::LogViewer(ref state) = app.state {
+        assert_eq!(state.filter, crate::app::state::LogFilterLevel::Info);
+        assert_eq!(state.filtered_indices().len(), 1);
+    }
+
+    // Key '4' sets filter to Error
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('4')));
+    if let AppState::LogViewer(ref state) = app.state {
+        assert_eq!(state.filter, crate::app::state::LogFilterLevel::Error);
+        assert_eq!(state.filtered_indices().len(), 1);
+    }
+
+    // Key '1' sets filter back to All
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('1')));
+    if let AppState::LogViewer(ref state) = app.state {
+        assert_eq!(state.filter, crate::app::state::LogFilterLevel::All);
+        assert_eq!(state.filtered_indices().len(), 3);
+    }
+
+    // Esc returns to Browsing
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+}
+
+#[test]
+fn test_log_viewer_clear_and_reload() {
+    let mut app = App::new();
+    app.state = AppState::Browsing;
+
+    // 'o' also opens log viewer
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('o')));
+    assert!(matches!(app.state, AppState::LogViewer(_)));
+
+    // 'c' clears logs
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('c')));
+    if let AppState::LogViewer(ref state) = app.state {
+        assert!(state.all_lines.iter().any(|l| l.contains("Logs limpos")));
+    }
+
+    // 'q' closes log viewer
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('q')));
+    assert_eq!(app.state, AppState::Browsing);
+}

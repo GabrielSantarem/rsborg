@@ -121,6 +121,11 @@ impl App {
         self.is_task_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
+    pub fn open_log_viewer(&mut self) {
+        let lines = crate::logger::read_log_entries();
+        self.state = AppState::LogViewer(crate::app::state::LogViewerState::new(lines));
+    }
+
     pub fn cancel_active_task(&mut self) {
         self.is_task_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
         let pid = self.active_child_pid.swap(0, std::sync::atomic::Ordering::SeqCst);

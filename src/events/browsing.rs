@@ -7,7 +7,8 @@ use crate::browser::ItemStatus;
 pub fn handle_browsing(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Char('q') => app.quit(),
-        KeyCode::Char('l') | KeyCode::Char('L') => app.toggle_language(),
+        KeyCode::Char('l') => app.toggle_language(),
+        KeyCode::Char('L') | KeyCode::Char('o') | KeyCode::Char('O') => app.open_log_viewer(),
         KeyCode::Char('t') | KeyCode::Char('T') => app.toggle_theme(),
         KeyCode::Char('?') | KeyCode::F(1) => {
             app.state = AppState::HelpModal;

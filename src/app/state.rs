@@ -131,6 +131,91 @@ pub struct DiffViewState {
     pub selected_index: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogFilterLevel {
+    All,
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogViewerState {
+    pub all_lines: Vec<String>,
+    pub filter: LogFilterLevel,
+    pub scroll: usize,
+}
+
+impl LogViewerState {
+    pub fn new(lines: Vec<String>) -> Self {
+        let count = lines.len();
+        Self {
+            all_lines: lines,
+            filter: LogFilterLevel::All,
+            scroll: count.saturating_sub(20),
+        }
+    }
+
+    pub fn filtered_indices(&self) -> Vec<usize> {
+        self.all_lines
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, line)| {
+                let matches = match self.filter {
+                    LogFilterLevel::All => true,
+                    LogFilterLevel::Info => line.contains("[INFO]"),
+                    LogFilterLevel::Warn => line.contains("[WARN]"),
+                    LogFilterLevel::Error => line.contains("[ERROR]"),
+                };
+                if matches {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn set_filter(&mut self, filter: LogFilterLevel) {
+        self.filter = filter;
+        let count = self.filtered_indices().len();
+        self.scroll = count.saturating_sub(20);
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_down(&mut self, max_lines: usize) {
+        let total = self.filtered_indices().len();
+        if self.scroll + max_lines < total {
+            self.scroll += 1;
+        }
+    }
+
+    pub fn scroll_page_up(&mut self, page: usize) {
+        self.scroll = self.scroll.saturating_sub(page);
+    }
+
+    pub fn scroll_page_down(&mut self, page: usize, max_lines: usize) {
+        let total = self.filtered_indices().len();
+        if self.scroll + max_lines + page <= total {
+            self.scroll += page;
+        } else if self.scroll + max_lines < total {
+            self.scroll = total.saturating_sub(max_lines);
+        }
+    }
+
+    pub fn scroll_top(&mut self) {
+        self.scroll = 0;
+    }
+
+    pub fn scroll_bottom(&mut self, max_lines: usize) {
+        let total = self.filtered_indices().len();
+        self.scroll = total.saturating_sub(max_lines);
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AppState {
     Initializing,
@@ -155,6 +240,7 @@ pub enum AppState {
     CreatingProfile(ProfileWizardState),
     AutomationView(AutomationViewState),
     HelpModal,
+    LogViewer(LogViewerState),
 }
 
 #[derive(Debug, PartialEq)]
