@@ -130,6 +130,37 @@ impl App {
                         }
                     }
                 }
+                ThreadStatus::DoneArchiveInfo(res, name) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(info) => {
+                            self.state = AppState::ArchiveInfo(crate::app::state::ArchiveInfoState {
+                                archive_name: name,
+                                info,
+                                active_tab: 0,
+                            });
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
+                ThreadStatus::DoneRepoInfo(res) => {
+                    self.loading_start = None;
+                    match res {
+                        Ok(info) => {
+                            let repo_name = self.get_active_repo().map(|r| r.name.clone()).unwrap_or_else(|| "Repositório".to_string());
+                            self.state = AppState::ArchiveInfo(crate::app::state::ArchiveInfoState {
+                                archive_name: repo_name,
+                                info,
+                                active_tab: 1,
+                            });
+                        }
+                        Err(e) => {
+                            self.state = AppState::ErrorPopup(e);
+                        }
+                    }
+                }
                 ThreadStatus::Error(e) => {
                     self.loading_start = None;
                     self.state = AppState::ErrorPopup(e);

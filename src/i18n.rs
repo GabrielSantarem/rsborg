@@ -266,15 +266,55 @@ impl Translator {
         settings_item_lang => (pt: "Idioma da Interface", en: "UI Language"),
         settings_item_theme => (pt: "Tema Visual", en: "Visual Theme"),
         settings_item_repos => (pt: "Gerenciar Repositórios", en: "Manage Repositories"),
+        settings_item_stats => (pt: "Estatísticas & Deduplicação", en: "Statistics & Deduplication"),
         settings_item_logs => (pt: "Visualizador de Logs", en: "System Logs Viewer"),
         settings_item_restore => (pt: "Pasta Padrão de Restauração", en: "Default Restore Folder"),
         settings_item_core => (pt: "Motor BorgBackup", en: "BorgBackup Engine"),
         settings_footer => (pt: " [j/k/Setas] Navegar | [Enter/Espaço] Alternar/Abrir | [Esc] Fechar ", en: " [j/k/Arrows] Navigate | [Enter/Space] Toggle/Open | [Esc] Close "),
         footer_settings => (pt: "Configurações", en: "Settings"),
         help_nav_settings => (pt: "Abrir Central de Configurações (Idioma, Tema, Repositórios, Logs)", en: "Open Settings Center (Language, Theme, Repos, Logs)"),
+        info_title => (pt: " DETALHES & ESTATÍSTICAS (BORG INFO) ", en: " DETAILS & STATISTICS (BORG INFO) "),
+        info_tab_snapshot => (pt: " [1] Snapshot Selecionado ", en: " [1] Selected Snapshot "),
+        info_tab_repo => (pt: " [2] Repositório & Deduplicação Global ", en: " [2] Repository & Global Deduplication "),
+        info_sec_metadata => (pt: "Identificação & Metadados", en: "Identification & Metadata"),
+        info_sec_stats => (pt: "Tamanhos & Taxa de Compressão", en: "Sizes & Compression Ratio"),
+        info_sec_dedup => (pt: "Deduplicação & Economia de Disco", en: "Deduplication & Disk Savings"),
+        info_sec_repo => (pt: "Estrutura do Repositório & Cache Local", en: "Repository Structure & Local Cache"),
+        info_lbl_name => (pt: "Nome:", en: "Name:"),
+        info_lbl_id => (pt: "ID Hash:", en: "Hash ID:"),
+        info_lbl_timestamp => (pt: "Timestamp:", en: "Timestamp:"),
+        info_lbl_duration => (pt: "Duração da Execução:", en: "Execution Duration:"),
+        info_lbl_host_user => (pt: "Host / Usuário:", en: "Host / User:"),
+        info_lbl_command => (pt: "Comando Borg:", en: "Borg Command:"),
+        info_lbl_files => (pt: "Arquivos Contidos:", en: "Files Count:"),
+        info_lbl_original_size => (pt: "Tamanho Original (Não comprimido):", en: "Original Size (Uncompressed):"),
+        info_lbl_compressed_size => (pt: "Tamanho Comprimido:", en: "Compressed Size:"),
+        info_lbl_dedup_size => (pt: "Deduplicado (Novo no disco):", en: "Deduplicated (New on disk):"),
+        info_lbl_compression_ratio => (pt: "Economia por Compressão:", en: "Compression Savings:"),
+        info_lbl_repo_location => (pt: "Localização:", en: "Location:"),
+        info_lbl_repo_id => (pt: "ID do Repositório:", en: "Repository ID:"),
+        info_lbl_encryption => (pt: "Criptografia:", en: "Encryption:"),
+        info_lbl_repo_original => (pt: "Volume Total Não Comprimido:", en: "Total Uncompressed Volume:"),
+        info_lbl_repo_compressed => (pt: "Volume Total Comprimido:", en: "Total Compressed Volume:"),
+        info_lbl_repo_dedup => (pt: "Tamanho Real Ocupado em Disco:", en: "Actual Disk Space Used:"),
+        info_lbl_repo_savings => (pt: "Economia Total por Deduplicação:", en: "Total Deduplication Savings:"),
+        info_lbl_chunks => (pt: "Total de Chunks:", en: "Total Chunks:"),
+        info_lbl_unique_chunks => (pt: "Chunks Únicos (Deduplicados):", en: "Unique Chunks (Deduplicated):"),
+        info_footer => (pt: " [1/2/Tab] Alternar Abas | [Esc/q] Fechar ", en: " [1/2/Tab] Switch Tabs | [Esc/q] Close "),
+        footer_info => (pt: "Info", en: "Info"),
+        help_act_info => (pt: "Ver Estatísticas e Deduplicação (borg info)", en: "View Statistics & Deduplication (borg info)"),
+        loading_repo_info => (pt: "Consultando estatísticas do repositório...", en: "Querying repository statistics..."),
     }
 
     // --- Métodos Dinâmicos com Formatação (Parâmetros) ---
+    #[allow(dead_code)]
+    pub fn loading_info_fmt(&self, name: &str) -> String {
+        match self.lang {
+            Language::Pt => format!("Consultando estatísticas de '{}'...", name),
+            Language::En => format!("Querying statistics for '{}'...", name),
+        }
+    }
+
     #[allow(dead_code)]
     pub fn fuse_mounted_fmt(&self, path: &str) -> String {
         match self.lang {

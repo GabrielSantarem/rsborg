@@ -9,11 +9,13 @@ mod tests;
 
 pub use errors::BorgError;
 pub use models::{
-    ArchiveFileEntry, BackupArchive, BackupProgress, BorgArchiveList, BorgCheckMode, CheckResult,
-    DiffChangeItem, DiffEntry, DiffKind, PruneArchiveItem, RepositoryInfo,
+    ArchiveFileEntry, ArchiveInfoDetails, ArchiveStats, BackupArchive, BackupProgress,
+    BorgArchiveList, BorgCheckMode, BorgInfoResponse, CacheInfo, CacheStats, CheckResult,
+    DiffChangeItem, DiffEntry, DiffKind, EncryptionInfo, PruneArchiveItem, RepositoryInfo,
+    RepositoryInfoExtended,
 };
 #[allow(unused_imports)]
-pub use parser::{format_bytes, parse_backup_progress, parse_prune_line};
+pub use parser::{format_bytes, format_duration_secs, parse_backup_progress, parse_prune_line};
 
 use crate::config::PrunePolicy;
 use std::io::Read;
@@ -738,5 +740,99 @@ Stdout content:
         }
 
         Ok(entries)
+    }
+
+    pub fn info_archive(
+        &self,
+        repo_path: &str,
+        archive_name: &str,
+        passphrase: Option<&str>,
+    ) -> Result<BorgInfoResponse, String> {
+        if repo_path == "/caminho/para/meu/repo" {
+            return Ok(BorgInfoResponse {
+                archives: vec![ArchiveInfoDetails {
+                    name: archive_name.to_string(),
+                    id: "mock_archive_id_123".to_string(),
+                    start: "2026-09-19T06:03:32.000000".to_string(),
+                    end: "2026-09-19T06:03:33.000000".to_string(),
+                    duration: 1.25,
+                    hostname: "mock-host".to_string(),
+                    username: "mock-user".to_string(),
+                    comment: "Mock archive info".to_string(),
+                    command_line: vec!["borg".into(), "create".into()],
+                    stats: Some(ArchiveStats {
+                        original_size: 1_000_000_000,
+                        compressed_size: 500_000_000,
+                        deduplicated_size: 200_000_000,
+                        nfiles: 1500,
+                    }),
+                }],
+                cache: Some(CacheInfo {
+                    path: "/home/user/.cache/borg/mock".to_string(),
+                    stats: Some(CacheStats {
+                        total_chunks: 5000,
+                        total_unique_chunks: 2500,
+                        total_size: 3_000_000_000,
+                        total_csize: 1_500_000_000,
+                        unique_size: 1_000_000_000,
+                        unique_csize: 500_000_000,
+                    }),
+                }),
+                repository: Some(RepositoryInfoExtended {
+                    id: "mock_repo_id".to_string(),
+                    location: repo_path.to_string(),
+                    last_modified: "2026-09-19T23:04:29.000000".to_string(),
+                }),
+                encryption: Some(EncryptionInfo {
+                    mode: "none".to_string(),
+                }),
+            });
+        }
+
+        let target = format!("{}::{}", repo_path, archive_name);
+        let cmd = self.prepare_command(&["info", "--json", &target], passphrase);
+        let output = self.execute_command(cmd, &format!("info for archive '{}'", target))?;
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        serde_json::from_str(&json_str).map_err(|e| {
+            BorgError::JsonParseError(format!("Failed to parse archive info JSON: {}", e)).to_string()
+        })
+    }
+
+    pub fn info_repository(
+        &self,
+        repo_path: &str,
+        passphrase: Option<&str>,
+    ) -> Result<BorgInfoResponse, String> {
+        if repo_path == "/caminho/para/meu/repo" {
+            return Ok(BorgInfoResponse {
+                archives: Vec::new(),
+                cache: Some(CacheInfo {
+                    path: "/home/user/.cache/borg/mock".to_string(),
+                    stats: Some(CacheStats {
+                        total_chunks: 5000,
+                        total_unique_chunks: 2500,
+                        total_size: 3_000_000_000,
+                        total_csize: 1_500_000_000,
+                        unique_size: 1_000_000_000,
+                        unique_csize: 500_000_000,
+                    }),
+                }),
+                repository: Some(RepositoryInfoExtended {
+                    id: "mock_repo_id".to_string(),
+                    location: repo_path.to_string(),
+                    last_modified: "2026-09-19T23:04:29.000000".to_string(),
+                }),
+                encryption: Some(EncryptionInfo {
+                    mode: "none".to_string(),
+                }),
+            });
+        }
+
+        let cmd = self.prepare_command(&["info", "--json", repo_path], passphrase);
+        let output = self.execute_command(cmd, &format!("info for repository '{}'", repo_path))?;
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        serde_json::from_str(&json_str).map_err(|e| {
+            BorgError::JsonParseError(format!("Failed to parse repository info JSON: {}", e)).to_string()
+        })
     }
 }

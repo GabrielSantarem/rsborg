@@ -18,6 +18,7 @@ pub mod repos;
 pub mod restore;
 pub mod logs;
 pub mod settings;
+pub mod info;
 pub mod theme;
 
 use crate::app::{App, AppState};
@@ -217,6 +218,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if let AppState::Settings(ref state) = app.state {
         settings::render_settings(f, app, state, size);
     }
+
+    if let AppState::ArchiveInfo(ref state) = app.state {
+        info::render_archive_info(f, app, state, size);
+    }
 }
 
 fn render_styled_footer<'a>(app: &'a App) -> Line<'a> {
@@ -236,6 +241,9 @@ fn render_styled_footer<'a>(app: &'a App) -> Line<'a> {
                 sep.clone(),
                 Span::styled(" [Enter] ", key_style),
                 Span::styled(if is_pt { "Inspecionar" } else { "Inspect" }, desc_style),
+                sep.clone(),
+                Span::styled(" [i] ", key_style),
+                Span::styled(app.t.footer_info(), desc_style),
                 sep.clone(),
                 Span::styled(" [f] ", key_style),
                 Span::styled("Diff", desc_style),
@@ -260,6 +268,16 @@ fn render_styled_footer<'a>(app: &'a App) -> Line<'a> {
                 sep,
                 Span::styled(" [q] ", key_style),
                 Span::styled(if is_pt { "Sair" } else { "Quit" }, desc_style),
+            ])
+        }
+        AppState::ArchiveInfo(_) => {
+            let is_pt = app.t.lang == crate::i18n::Language::Pt;
+            Line::from(vec![
+                Span::styled(" [1/2/Tab] ", key_style),
+                Span::styled(if is_pt { "Alternar Abas" } else { "Switch Tabs" }, desc_style),
+                sep,
+                Span::styled(" [Esc] ", key_style),
+                Span::styled(if is_pt { "Voltar" } else { "Back" }, desc_style),
             ])
         }
         AppState::Settings(_) => {

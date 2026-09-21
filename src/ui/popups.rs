@@ -268,6 +268,10 @@ pub fn render_help_modal(f: &mut Frame, app: &App, screen_area: Rect) {
             Span::styled(app.t.help_act_inspect(), desc_style),
         ]),
         Line::from(vec![
+            Span::styled("    [i]               ", key_style),
+            Span::styled(app.t.help_act_info(), desc_style),
+        ]),
+        Line::from(vec![
             Span::styled("    [x]               ", key_style),
             Span::styled(app.t.help_act_restore(), desc_style),
         ]),

@@ -242,6 +242,14 @@ pub enum AppState {
     HelpModal,
     LogViewer(LogViewerState),
     Settings(SettingsState),
+    ArchiveInfo(ArchiveInfoState),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArchiveInfoState {
+    pub archive_name: String,
+    pub info: crate::borg::BorgInfoResponse,
+    pub active_tab: usize, // 0 = Snapshot, 1 = Repository & Deduplication
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -265,5 +273,7 @@ pub enum ThreadStatus {
     DonePruneExecute(Result<usize, String>),
     DoneCheck(Result<CheckResult, String>, String, String),
     DoneDiff(Result<Vec<DiffEntry>, String>, String, String),
+    DoneArchiveInfo(Result<crate::borg::BorgInfoResponse, String>, String),
+    DoneRepoInfo(Result<crate::borg::BorgInfoResponse, String>),
     Error(String),
 }

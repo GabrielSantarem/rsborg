@@ -3,7 +3,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use crate::app::App;
 use crate::app::state::AppState;
 
-pub const SETTINGS_ITEMS_COUNT: usize = 6;
+pub const SETTINGS_ITEMS_COUNT: usize = 7;
 
 pub fn handle_settings(app: &mut App, key: KeyEvent) {
     if let AppState::Settings(ref mut state) = app.state {
@@ -25,7 +25,8 @@ pub fn handle_settings(app: &mut App, key: KeyEvent) {
                 0 => app.toggle_language(),
                 1 => app.toggle_theme(),
                 2 => app.state = AppState::ManagingRepos,
-                3 => app.open_log_viewer(),
+                3 => app.open_repo_info(),
+                4 => app.open_log_viewer(),
                 _ => {}
             },
             KeyCode::Char('l') => {
@@ -36,6 +37,9 @@ pub fn handle_settings(app: &mut App, key: KeyEvent) {
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 app.state = AppState::ManagingRepos;
+            }
+            KeyCode::Char('i') | KeyCode::Char('I') => {
+                app.open_repo_info();
             }
             KeyCode::Char('L') | KeyCode::Char('o') => {
                 app.open_log_viewer();

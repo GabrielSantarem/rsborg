@@ -45,6 +45,12 @@ pub fn render_settings(f: &mut Frame, app: &App, state: &SettingsState, screen_a
         format!("{} configured ->", repos_count)
     };
 
+    let stats_badge = if is_pt {
+        "Consultar deduplicação ->"
+    } else {
+        "Query deduplication ->"
+    };
+
     let logs_badge = if is_pt {
         "Visualizar rsborg.log ->"
     } else {
@@ -60,6 +66,7 @@ pub fn render_settings(f: &mut Frame, app: &App, state: &SettingsState, screen_a
         (app.t.settings_item_lang(), lang_badge.to_string(), true),
         (app.t.settings_item_theme(), theme_badge.to_string(), true),
         (app.t.settings_item_repos(), repos_badge, true),
+        (app.t.settings_item_stats(), stats_badge.to_string(), true),
         (app.t.settings_item_logs(), logs_badge.to_string(), true),
         (app.t.settings_item_restore(), restore_badge, false),
         (app.t.settings_item_core(), core_badge, false),
@@ -141,12 +148,19 @@ pub fn render_settings(f: &mut Frame, app: &App, state: &SettingsState, screen_a
         }
         3 => {
             if is_pt {
+                "Consulte o total deduplicado, chunks únicos e economia real em disco (borg info)."
+            } else {
+                "Query total deduplication savings, unique chunks, and disk usage (borg info)."
+            }
+        }
+        4 => {
+            if is_pt {
                 "Abra o visualizador integrado com rolagem, filtros de erro e histórico de comandos."
             } else {
                 "Open integrated log viewer with scrolling, error filters, and command history."
             }
         }
-        4 => {
+        5 => {
             if is_pt {
                 "Pasta no disco onde os arquivos restaurados de snapshots são salvos por padrão."
             } else {

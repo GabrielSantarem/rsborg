@@ -178,3 +178,86 @@ impl BackupProgress {
         crate::borg::parser::parse_backup_progress(line)
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct ArchiveStats {
+    #[serde(default)]
+    pub original_size: u64,
+    #[serde(default)]
+    pub compressed_size: u64,
+    #[serde(default)]
+    pub deduplicated_size: u64,
+    #[serde(default)]
+    pub nfiles: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct CacheStats {
+    #[serde(default)]
+    pub total_chunks: u64,
+    #[serde(default)]
+    pub total_unique_chunks: u64,
+    #[serde(default)]
+    pub total_size: u64,
+    #[serde(default)]
+    pub total_csize: u64,
+    #[serde(default)]
+    pub unique_size: u64,
+    #[serde(default)]
+    pub unique_csize: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct ArchiveInfoDetails {
+    pub name: String,
+    pub id: String,
+    pub start: String,
+    #[serde(default)]
+    pub end: String,
+    #[serde(default)]
+    pub duration: f64,
+    #[serde(default)]
+    pub hostname: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub comment: String,
+    #[serde(default)]
+    pub command_line: Vec<String>,
+    #[serde(default)]
+    pub stats: Option<ArchiveStats>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct CacheInfo {
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub stats: Option<CacheStats>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct EncryptionInfo {
+    #[serde(default)]
+    pub mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct RepositoryInfoExtended {
+    pub id: String,
+    pub location: String,
+    #[serde(default)]
+    pub last_modified: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+pub struct BorgInfoResponse {
+    #[serde(default)]
+    pub archives: Vec<ArchiveInfoDetails>,
+    #[serde(default)]
+    pub cache: Option<CacheInfo>,
+    #[serde(default)]
+    pub repository: Option<RepositoryInfoExtended>,
+    #[serde(default)]
+    pub encryption: Option<EncryptionInfo>,
+}

@@ -40,6 +40,9 @@ pub fn handle_browsing(app: &mut App, key: KeyEvent) {
         KeyCode::Char('d') => {
             app.ask_delete_archive();
         }
+        KeyCode::Char('i') => {
+            app.open_info_selected_archive();
+        }
         KeyCode::Enter => {
             app.inspect_selected_archive();
         }

@@ -108,6 +108,81 @@ impl App {
         }
     }
 
+    pub fn open_info_selected_archive(&mut self) {
+        if let Some(i) = self.table_state.selected()
+            && let Some(archive) = self.archives.get(i)
+        {
+            let name = archive.name.clone();
+            let (repo_path, passphrase) = match self.get_active_repo() {
+                Some(r) => (r.location.clone(), r.passphrase.clone()),
+                None => (config::get_default_repo_path(), None),
+            };
+
+            self.loading_info = LoadingInfo {
+                message: self.t.loading_info_fmt(&name),
+                elapsed_secs: 0,
+                original_size: "0 B".to_string(),
+                compressed_size: "0 B".to_string(),
+                deduplicated_size: "0 B".to_string(),
+                files_count: "0".to_string(),
+                current_file: "Executando borg info...".to_string(),
+                raw_line: String::new(),
+                spinner_frame: 0,
+            };
+            self.loading_start = Some(Instant::now());
+            self.state = AppState::Loading;
+
+            self.reset_cancellation_flags();
+            let tx = self.tx.clone();
+            let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+            let is_cancelled = self.is_task_cancelled.clone();
+
+            thread::spawn(move || {
+                let res = manager.info_archive(&repo_path, &name, passphrase.as_deref());
+                if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = tx.send(ThreadStatus::DoneArchiveInfo(res, name));
+                } else {
+                    crate::log_info!("info_archive thread terminated after cancellation; discarding result");
+                }
+            });
+        }
+    }
+
+    pub fn open_repo_info(&mut self) {
+        let (repo_path, passphrase) = match self.get_active_repo() {
+            Some(r) => (r.location.clone(), r.passphrase.clone()),
+            None => (config::get_default_repo_path(), None),
+        };
+
+        self.loading_info = LoadingInfo {
+            message: self.t.loading_repo_info().to_string(),
+            elapsed_secs: 0,
+            original_size: "0 B".to_string(),
+            compressed_size: "0 B".to_string(),
+            deduplicated_size: "0 B".to_string(),
+            files_count: "0".to_string(),
+            current_file: "Executando borg info...".to_string(),
+            raw_line: String::new(),
+            spinner_frame: 0,
+        };
+        self.loading_start = Some(Instant::now());
+        self.state = AppState::Loading;
+
+        self.reset_cancellation_flags();
+        let tx = self.tx.clone();
+        let manager = BorgManager::with_cancellation(self.active_child_pid.clone());
+        let is_cancelled = self.is_task_cancelled.clone();
+
+        thread::spawn(move || {
+            let res = manager.info_repository(&repo_path, passphrase.as_deref());
+            if !is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                let _ = tx.send(ThreadStatus::DoneRepoInfo(res));
+            } else {
+                crate::log_info!("info_repository thread terminated after cancellation; discarding result");
+            }
+        });
+    }
+
     pub fn ask_restore_selected_archive(&mut self) {
         if let Some(i) = self.table_state.selected()
             && let Some(archive) = self.archives.get(i)

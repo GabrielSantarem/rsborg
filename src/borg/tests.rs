@@ -237,4 +237,103 @@ TAM: warning message line that is not json
         assert_eq!(list.archives[0].name, "backup1");
         assert_eq!(list.repository.location, "/home/tomate/.rsborg/backups");
     }
+    #[test]
+    fn test_deserialize_real_borg_info_archive_json() {
+        let json_sample = r#"{
+            "archives": [
+                {
+                    "command_line": ["borg", "create", "--stats", "repo::snap1", "/home"],
+                    "comment": "",
+                    "duration": 1.25,
+                    "end": "2026-09-19T06:03:33.000000",
+                    "hostname": "fedora",
+                    "id": "43f9c67ab0f80ee05f267aa93990721b93ed0cbd1ab0017077699ac6172b17b8",
+                    "name": "snap1",
+                    "start": "2026-09-19T06:03:32.000000",
+                    "stats": {
+                        "compressed_size": 937509788,
+                        "deduplicated_size": 123456,
+                        "nfiles": 339,
+                        "original_size": 950163828
+                    },
+                    "username": "tomate"
+                }
+            ],
+            "cache": {
+                "path": "/home/tomate/.cache/borg/xxx",
+                "stats": {
+                    "total_chunks": 1977,
+                    "total_csize": 2812529364,
+                    "total_size": 2850491484,
+                    "total_unique_chunks": 659,
+                    "unique_csize": 937416341,
+                    "unique_size": 950135266
+                }
+            },
+            "encryption": {
+                "mode": "none"
+            },
+            "repository": {
+                "id": "731a661ac4393739d0fe4b02637af7a3c277a02f27d80daa774cf111ae713c8e",
+                "last_modified": "2026-09-19T23:04:29.000000",
+                "location": "/home/tomate/.rsborg/backups"
+            }
+        }"#;
+
+        let res = serde_json::from_str::<crate::borg::BorgInfoResponse>(json_sample);
+        assert!(res.is_ok());
+        let info = res.unwrap();
+        assert_eq!(info.archives.len(), 1);
+        let archive = &info.archives[0];
+        assert_eq!(archive.name, "snap1");
+        assert_eq!(archive.stats.as_ref().unwrap().nfiles, 339);
+        assert_eq!(archive.stats.as_ref().unwrap().compressed_size, 937509788);
+        assert_eq!(info.cache.as_ref().unwrap().stats.as_ref().unwrap().total_chunks, 1977);
+    }
+
+    #[test]
+    fn test_deserialize_real_borg_info_repo_json() {
+        let json_sample = r#"{
+            "cache": {
+                "path": "/home/tomate/.cache/borg/xxx",
+                "stats": {
+                    "total_chunks": 1977,
+                    "total_csize": 2812529364,
+                    "total_size": 2850491484,
+                    "total_unique_chunks": 659,
+                    "unique_csize": 937416341,
+                    "unique_size": 950135266
+                }
+            },
+            "encryption": {
+                "mode": "repokey"
+            },
+            "repository": {
+                "id": "731a661ac4393739d0fe4b02637af7a3c277a02f27d80daa774cf111ae713c8e",
+                "last_modified": "2026-09-19T23:04:29.000000",
+                "location": "/home/tomate/.rsborg/backups"
+            }
+        }"#;
+
+        let res = serde_json::from_str::<crate::borg::BorgInfoResponse>(json_sample);
+        assert!(res.is_ok());
+        let info = res.unwrap();
+        assert_eq!(info.archives.len(), 0);
+        assert_eq!(info.encryption.as_ref().unwrap().mode, "repokey");
+        let stats = info.cache.as_ref().unwrap().stats.as_ref().unwrap();
+        assert_eq!(stats.total_unique_chunks, 659);
+    }
+
+    #[test]
+    fn test_format_bytes_and_duration() {
+        assert_eq!(crate::borg::format_bytes(500), "500 B");
+        assert_eq!(crate::borg::format_bytes(1024 * 5), "5.0 kB");
+        assert_eq!(crate::borg::format_bytes(1024 * 1024 * 10), "10.00 MB");
+        assert_eq!(crate::borg::format_bytes(1024 * 1024 * 1024 * 2), "2.00 GB");
+        assert_eq!(crate::borg::format_bytes(1024 * 1024 * 1024 * 1024 * 3), "3.00 TB");
+
+        assert_eq!(crate::borg::format_duration_secs(0.45), "0.45s");
+        assert_eq!(crate::borg::format_duration_secs(12.3), "12.3s");
+        assert_eq!(crate::borg::format_duration_secs(125.0), "2m 5s");
+    }
 }

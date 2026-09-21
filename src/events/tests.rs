@@ -268,3 +268,35 @@ fn test_settings_navigation_and_actions() {
     handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('s')));
     assert_eq!(app.state, AppState::Browsing);
 }
+
+#[test]
+fn test_archive_info_navigation_and_tabs() {
+    let mut app = App::new();
+    app.state = AppState::ArchiveInfo(crate::app::state::ArchiveInfoState {
+        archive_name: "test_snapshot".to_string(),
+        info: crate::borg::BorgInfoResponse::default(),
+        active_tab: 0,
+    });
+
+    // Tab switches to tab 1
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Tab));
+    if let AppState::ArchiveInfo(ref state) = app.state {
+        assert_eq!(state.active_tab, 1);
+    }
+
+    // '1' switches back to tab 0
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('1')));
+    if let AppState::ArchiveInfo(ref state) = app.state {
+        assert_eq!(state.active_tab, 0);
+    }
+
+    // '2' switches to tab 1
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Char('2')));
+    if let AppState::ArchiveInfo(ref state) = app.state {
+        assert_eq!(state.active_tab, 1);
+    }
+
+    // 'q' or 'Esc' closes info modal and returns to Browsing
+    handle_key_event(&mut app, KeyEvent::from(KeyCode::Esc));
+    assert_eq!(app.state, AppState::Browsing);
+}
